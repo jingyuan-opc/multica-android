@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Multica</string>
+
+    <!-- Login -->
+    <string name="login_title">Sign in to Multica</string>
+    <string name="login_email_label">Email</string>
+    <string name="login_email_hint">you@company.com</string>
+    <string name="login_send_code">Send verification code</string>
+    <string name="login_code_sent">Code sent. Check your inbox.</string>
+    <string name="login_code_label">6-digit code</string>
+    <string name="login_verify">Verify and sign in</string>
+    <string name="login_resend">Resend code</string>
+    <string name="login_resend_cooldown">Resend in %1$ds</string>
+    <string name="login_change_email">Use a different email</string>
+    <string name="login_email_required">Please enter your email</string>
+    <string name="login_code_required">Enter the 6-digit code</string>
+
+    <!-- Inbox -->
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_unread">Unread</string>
+    <string name="inbox_all">All</string>
+    <string name="inbox_empty">No notifications</string>
+    <string name="inbox_mark_all_read">Mark all as read</string>
+    <string name="inbox_archive_read">Archive all read</string>
+    <string name="inbox_swipe_archive">Archive</string>
+    <string name="inbox_swipe_read">Mark read</string>
+
+    <!-- Projects -->
+    <string name="projects_title">Projects</string>
+    <string name="projects_empty">No projects yet</string>
+
+    <!-- Issues -->
+    <string name="issues_title">Issues</string>
+    <string name="issues_view_board">Board</string>
+    <string name="issues_view_list">List</string>
+    <string name="issues_filter">Filter</string>
+    <string name="issues_empty">No issues match your filters</string>
+    <string name="issues_search">Search issues…</string>
+    <string name="issue_detail_title">Issue</string>
+    <string name="issue_comments">Comments &amp; activity</string>
+    <string name="issue_add_comment">Add a comment…</string>
+    <string name="issue_post">Post</string>
+
+    <!-- Workspace switcher -->
+    <string name="workspace_switcher_title">Workspaces</string>
+    <string name="workspace_unread_others">Other workspaces have unread</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_logout">Log out</string>
+    <string name="settings_logout_confirm_title">Log out?</string>
+    <string name="settings_logout_confirm_body">You\'ll need to sign in again.</string>
+    <string name="settings_logout_confirm_yes">Log out</string>
+    <string name="settings_logout_confirm_no">Cancel</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_server_url">Server URL</string>
+    <string name="settings_add_server">Add server</string>
+    <string name="settings_server_name">Name</string>
+    <string name="settings_server_url_hint">https://example.com</string>
+    <string name="settings_save">Save</string>
+
+    <!-- Common -->
+    <string name="common_retry">Retry</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_ok">OK</string>
+    <string name="common_loading">Loading…</string>
+    <string name="common_error">Something went wrong</string>
+    <string name="common_offline">You\'re offline</string>
+    <string name="common_network_error">Network error — check your connection</string>
+
+    <!-- App shortcuts -->
+    <string name="shortcut_inbox_short">Inbox</string>
+    <string name="shortcut_inbox_long">Open inbox</string>
+    <string name="shortcut_issues_short">Issues</string>
+    <string name="shortcut_issues_long">Browse issues</string>
+    <string name="shortcut_projects_short">Projects</string>
+    <string name="shortcut_projects_long">View projects</string>
+</resources>

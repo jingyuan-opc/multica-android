@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Static colors used for splash / pre-Compose theming.
+         Runtime theme is defined in Material 3 ColorScheme (see core/theme/). -->
+
+    <!-- Splash background (matches multica brand blue) -->
+    <color name="splash_background">#FF2C5DD6</color>
+    <color name="splash_background_dark">#FF1E3A8A</color>
+
+    <!-- System bar colors -->
+    <color name="system_bar_light">#FFFFFFFF</color>
+    <color name="system_bar_dark">#FF111114</color>
+</resources>

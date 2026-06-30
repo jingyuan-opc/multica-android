@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pre-Compose themes: only used at app launch / activity attach,
+         before Compose takes over. See core/theme/MulticaTheme.kt. -->
+
+    <style name="Theme.Multica" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/system_bar_light</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.Multica.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Multica</item>
+    </style>
+</resources>

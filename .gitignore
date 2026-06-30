@@ -1,0 +1,36 @@
+# Gradle
+.gradle/
+build/
+captures/
+.cxx/
+local.properties
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+
+# Android Studio
+.navigation/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Logs
+*.log
+hs_err_pid*
+
+# Generated
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores (NEVER commit)
+*.jks
+*.keystore
+release.keystore
+debug.keystore

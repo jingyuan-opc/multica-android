@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="inbox"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_inbox"
+        android:shortcutShortLabel="@string/shortcut_inbox_short"
+        android:shortcutLongLabel="@string/shortcut_inbox_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ai.multica.android"
+            android:targetClass="ai.multica.android.MainActivity"
+            android:data="multica://inbox" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="issues"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_issues"
+        android:shortcutShortLabel="@string/shortcut_issues_short"
+        android:shortcutLongLabel="@string/shortcut_issues_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ai.multica.android"
+            android:targetClass="ai.multica.android.MainActivity"
+            android:data="multica://issues" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="projects"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_projects"
+        android:shortcutShortLabel="@string/shortcut_projects_short"
+        android:shortcutLongLabel="@string/shortcut_projects_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="ai.multica.android"
+            android:targetClass="ai.multica.android.MainActivity"
+            android:data="multica://projects" />
+    </shortcut>
+</shortcuts>

@@ -1,0 +1,71 @@
+package ai.multica.android.core.network
+
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Retrofit
+import java.util.concurrent.TimeUnit
+import ai.multica.android.BuildConfig
+
+/**
+ * Factory that builds a [Retrofit] + [OkHttpClient] + [Json] triple
+ * for a given base URL. Recreated by the Hilt module whenever the
+ * server URL changes (e.g. user switches from Cloud to Self-hosted).
+ */
+object NetworkFactory {
+
+    val json: Json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        coerceInputValues = true
+        prettyPrint = false
+    }
+
+    fun buildOkHttpClient(
+        authInterceptor: okhttp3.Interceptor,
+    ): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(logging)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            // Cap concurrent requests so a chatty source
+            // (e.g. a misbehaving WebSocket reconnect loop) can't
+            // starve the rest of the app.
+            .dispatcher(okhttp3.Dispatcher().apply {
+                maxRequests = 32
+                maxRequestsPerHost = 16
+            })
+            .build()
+    }
+
+    fun buildRetrofit(
+        baseUrl: String,
+        client: OkHttpClient,
+    ): Retrofit {
+        val normalized = if (baseUrl.endsWith("/")) baseUrl else "$baseUrl/"
+        return Retrofit.Builder()
+            .baseUrl(normalized)
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+    }
+
+    fun buildApi(
+        baseUrl: String,
+        authInterceptor: okhttp3.Interceptor,
+    ): MulticaApi = buildRetrofit(
+        baseUrl = baseUrl,
+        client = buildOkHttpClient(authInterceptor),
+    ).create(MulticaApi::class.java)
+}

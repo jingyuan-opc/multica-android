@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Default: forbid all cleartext. WSS (TLS-wrapped WebSocket)
+        is not affected by this setting.
+    -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+        Domain-specific overrides (e.g. the multica dev/staging
+        hostnames). Add here if you need to permit a specific host.
+    -->
+</network-security-config>
