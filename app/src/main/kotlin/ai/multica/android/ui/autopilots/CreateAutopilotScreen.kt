@@ -82,16 +82,7 @@ class CreateAutopilotViewModel @Inject constructor(
     /** Build a cron expression from frequency + time (HH:mm). */
     private fun rebuildCron() {
         val s = _state.value
-        val parts = s.time.split(":")
-        val hh = parts.getOrNull(0)?.padStart(2, '0') ?: "09"
-        val mm = parts.getOrNull(1)?.padStart(2, '0') ?: "00"
-        val cron = when (s.frequency) {
-            ScheduleFrequency.HOURLY -> "0 * * * *"
-            ScheduleFrequency.DAILY -> "$mm $hh * * *"
-            ScheduleFrequency.WEEKDAYS -> "$mm $hh * * 1-5"
-            ScheduleFrequency.WEEKLY -> "$mm $hh * * 1"
-        }
-        _state.update { it.copy(cronExpression = cron) }
+        _state.update { it.copy(cronExpression = buildCronFromFrequency(s.frequency, s.time)) }
     }
 
     fun create(onCreated: (String) -> Unit) {

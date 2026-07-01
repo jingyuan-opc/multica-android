@@ -37,6 +37,7 @@ class ProjectRepository @Inject constructor(
         description: String? = null,
         status: ProjectStatus = ProjectStatus.PLANNED,
         priority: ProjectPriority = ProjectPriority.NONE,
+        resources: List<ai.multica.android.data.dto.CreateProjectResourceInput> = emptyList(),
     ): ApiResult<Project> = apiCall(NetworkFactory.json) {
         api.createProject(
             ai.multica.android.data.dto.CreateProjectRequest(
@@ -44,6 +45,7 @@ class ProjectRepository @Inject constructor(
                 description = description?.trim()?.takeIf { it.isNotBlank() },
                 status = status.name.lowercase(),
                 priority = priority.name.lowercase(),
+                resources = resources,
             )
         )
     }

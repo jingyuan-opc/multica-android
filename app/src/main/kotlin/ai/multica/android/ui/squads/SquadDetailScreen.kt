@@ -10,8 +10,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
@@ -138,6 +140,21 @@ class SquadDetailViewModel @Inject constructor(
             refresh()
         }
     }
+
+    /**
+     * Archive the squad. The server implements archive as a soft-delete on
+     * DELETE /api/squads/{id}: it sets archived_at and transfers the squad's
+     * open issues and autopilots to the leader agent. There is no restore
+     * endpoint, so on success we navigate back to the list.
+     */
+    fun archive(onArchived: () -> Unit) {
+        viewModelScope.launch {
+            when (squadRepository.delete(squadId)) {
+                is ApiResult.Success -> onArchived()
+                else -> Unit
+            }
+        }
+    }
 }
 
 data class SquadDetailUiState(
@@ -158,6 +175,8 @@ fun SquadDetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val squad = state.squad
     var showEditDialog by remember { mutableStateOf(false) }
+    var showActions by remember { mutableStateOf(false) }
+    var showArchiveConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -171,6 +190,16 @@ fun SquadDetailScreen(
                 actions = {
                     IconButton(onClick = { showEditDialog = true }) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit")
+                    }
+                    IconButton(onClick = { showActions = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.squads_archive)) },
+                            onClick = { showActions = false; showArchiveConfirm = true },
+                            leadingIcon = { Icon(Icons.Filled.Archive, null) },
+                        )
                     }
                 },
             )
@@ -203,6 +232,21 @@ fun SquadDetailScreen(
                 showEditDialog = false
             },
             onDismiss = { showEditDialog = false },
+        )
+    }
+    if (showArchiveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showArchiveConfirm = false },
+            title = { Text(stringResource(R.string.squads_archive)) },
+            text = { Text(stringResource(R.string.squads_archive_confirm)) },
+            confirmButton = {
+                TextButton(onClick = { showArchiveConfirm = false; viewModel.archive(onBack) }) {
+                    Text(stringResource(R.string.squads_archive), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showArchiveConfirm = false }) { Text(stringResource(R.string.common_cancel)) }
+            },
         )
     }
 }

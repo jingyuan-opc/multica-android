@@ -5,13 +5,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -19,10 +24,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import ai.multica.android.R
 import ai.multica.android.core.network.ApiResult
+import ai.multica.android.data.dto.CreateProjectResourceInput
 import ai.multica.android.data.model.IssuePriority
 import ai.multica.android.data.model.Project
 import ai.multica.android.data.model.ProjectPriority
+import ai.multica.android.data.model.ProjectResourceType
 import ai.multica.android.data.model.ProjectStatus
+import ai.multica.android.data.model.githubRepoRef
+import ai.multica.android.data.model.localDirectoryRef
 import ai.multica.android.data.repository.ProjectRepository
 import ai.multica.android.ui.components.PriorityBars
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -140,6 +149,84 @@ fun CreateProjectScreen(
                 }
             }
 
+            // Source: attach GitHub repos or a local working directory at creation.
+            Text("Source", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = state.sourceMode == ProjectSourceMode.NONE,
+                    onClick = { viewModel.onSourceModeChange(ProjectSourceMode.NONE) },
+                    label = { Text("None") },
+                )
+                FilterChip(
+                    selected = state.sourceMode == ProjectSourceMode.GITHUB,
+                    onClick = { viewModel.onSourceModeChange(ProjectSourceMode.GITHUB) },
+                    leadingIcon = { Icon(Icons.Filled.Public, null, modifier = Modifier.size(16.dp)) },
+                    label = { Text("GitHub repos") },
+                )
+                FilterChip(
+                    selected = state.sourceMode == ProjectSourceMode.LOCAL,
+                    onClick = { viewModel.onSourceModeChange(ProjectSourceMode.LOCAL) },
+                    leadingIcon = { Icon(Icons.Filled.Folder, null, modifier = Modifier.size(16.dp)) },
+                    label = { Text("Local directory") },
+                )
+            }
+
+            if (state.sourceMode == ProjectSourceMode.GITHUB) {
+                OutlinedTextField(
+                    value = state.newGithubUrl,
+                    onValueChange = viewModel::onNewGithubUrlChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("GitHub URL") },
+                    placeholder = { Text("https://github.com/owner/repo") },
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = viewModel::onAddGithubUrl, enabled = state.newGithubUrl.isNotBlank()) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add")
+                        }
+                    },
+                )
+                state.githubUrls.forEach { url ->
+                    InputChip(
+                        onClick = { viewModel.onRemoveGithubUrl(url) },
+                        label = { Text(url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        selected = false,
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+
+            if (state.sourceMode == ProjectSourceMode.LOCAL) {
+                OutlinedTextField(
+                    value = state.localPath,
+                    onValueChange = viewModel::onLocalPathChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Local path *") },
+                    placeholder = { Text("/home/user/project") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = state.daemonId,
+                    onValueChange = viewModel::onDaemonIdChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Daemon ID") },
+                    placeholder = { Text("default") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = state.localLabel,
+                    onValueChange = viewModel::onLocalLabelChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Label (optional)") },
+                    singleLine = true,
+                )
+                Text(
+                    "Local paths are only visible to agents on this machine. Use GitHub repos for shared work.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             if (state.errorMessage != null) {
                 Text(
                     text = state.errorMessage!!,
@@ -172,6 +259,50 @@ class CreateProjectViewModel @Inject constructor(
     fun onStatusChange(status: ProjectStatus) = _state.update { it.copy(status = status) }
     fun onPriorityChange(priority: ProjectPriority) = _state.update { it.copy(priority = priority) }
 
+    fun onSourceModeChange(mode: ProjectSourceMode) = _state.update { it.copy(sourceMode = mode) }
+    fun onNewGithubUrlChange(value: String) = _state.update { it.copy(newGithubUrl = value) }
+    fun onAddGithubUrl() {
+        val url = _state.value.newGithubUrl.trim()
+        if (url.isNotBlank() && url !in _state.value.githubUrls) {
+            _state.update { it.copy(githubUrls = it.githubUrls + url, newGithubUrl = "") }
+        }
+    }
+    fun onRemoveGithubUrl(url: String) = _state.update { it.copy(githubUrls = it.githubUrls - url) }
+    fun onLocalPathChange(value: String) = _state.update { it.copy(localPath = value) }
+    fun onDaemonIdChange(value: String) = _state.update { it.copy(daemonId = value) }
+    fun onLocalLabelChange(value: String) = _state.update { it.copy(localLabel = value) }
+
+    /**
+     * Build the resources list from the current source mode. Mirrors the web's
+     * submit handler: only the active mode contributes resources; the inactive
+     * mode's stash is dropped.
+     */
+    private fun buildResources(s: CreateProjectUiState): List<CreateProjectResourceInput> {
+        return when (s.sourceMode) {
+            ProjectSourceMode.GITHUB -> s.githubUrls
+                .filter { it.isNotBlank() }
+                .mapIndexed { index, url ->
+                    CreateProjectResourceInput(
+                        resourceType = ProjectResourceType.GITHUB_REPO.wireValue,
+                        resourceRef = githubRepoRef(url),
+                        position = index,
+                    )
+                }
+            ProjectSourceMode.LOCAL -> {
+                if (s.localPath.isBlank()) return emptyList()
+                val daemon = s.daemonId.trim().ifBlank { "default" }
+                listOf(
+                    CreateProjectResourceInput(
+                        resourceType = ProjectResourceType.LOCAL_DIRECTORY.wireValue,
+                        resourceRef = localDirectoryRef(s.localPath, daemon, s.localLabel.ifBlank { null }),
+                        position = 0,
+                    ),
+                )
+            }
+            ProjectSourceMode.NONE -> emptyList()
+        }
+    }
+
     fun submit() {
         val s = _state.value
         if (s.title.isBlank()) {
@@ -185,6 +316,7 @@ class CreateProjectViewModel @Inject constructor(
                 description = s.description.takeIf { it.isNotBlank() },
                 status = s.status,
                 priority = s.priority,
+                resources = buildResources(s),
             )) {
                 is ApiResult.Success -> _state.update {
                     it.copy(isSubmitting = false, createdProjectId = r.data.id)
@@ -209,6 +341,12 @@ data class CreateProjectUiState(
     val description: String = "",
     val status: ProjectStatus = ProjectStatus.PLANNED,
     val priority: ProjectPriority = ProjectPriority.NONE,
+    val sourceMode: ProjectSourceMode = ProjectSourceMode.NONE,
+    val githubUrls: List<String> = emptyList(),
+    val newGithubUrl: String = "",
+    val localPath: String = "",
+    val daemonId: String = "",
+    val localLabel: String = "",
     val isSubmitting: Boolean = false,
     val createdProjectId: String? = null,
     val errorMessage: String? = null,
@@ -237,3 +375,9 @@ private fun labelForStatus(s: ProjectStatus): String = when (s) {
     ProjectStatus.COMPLETED -> "Completed"
     ProjectStatus.CANCELLED -> "Cancelled"
 }
+
+/**
+ * Source attachment mode for project creation. Mirrors the web's binary
+ * `sourceMode` toggle ("repos" vs "local"); NONE means no resources attached.
+ */
+enum class ProjectSourceMode { NONE, GITHUB, LOCAL }

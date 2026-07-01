@@ -1,16 +1,20 @@
 package ai.multica.android.ui.autopilots
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Webhook
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material3.*
@@ -31,9 +35,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import ai.multica.android.R
 import ai.multica.android.core.network.ApiResult
+import ai.multica.android.data.dto.UpdateAutopilotTriggerRequest
 import ai.multica.android.data.model.AutopilotRun
 import ai.multica.android.data.model.AutopilotStatus
 import ai.multica.android.data.model.AutopilotTrigger
+import ai.multica.android.data.model.AutopilotTriggerKind
 import ai.multica.android.data.model.GetAutopilotResponse
 import ai.multica.android.data.repository.AutopilotRepository
 import ai.multica.android.ui.components.EmptyState
@@ -117,6 +123,35 @@ class AutopilotDetailViewModel @Inject constructor(
             refresh()
         }
     }
+
+    fun updateTrigger(trigger: AutopilotTrigger, cronExpression: String, timezone: String) {
+        viewModelScope.launch {
+            autopilotRepository.updateTrigger(
+                autopilotId,
+                trigger.id,
+                UpdateAutopilotTriggerRequest(cronExpression = cronExpression, timezone = timezone),
+            )
+            refresh()
+        }
+    }
+
+    fun toggleTriggerEnabled(trigger: AutopilotTrigger) {
+        viewModelScope.launch {
+            autopilotRepository.updateTrigger(
+                autopilotId,
+                trigger.id,
+                UpdateAutopilotTriggerRequest(enabled = !trigger.enabled),
+            )
+            refresh()
+        }
+    }
+
+    fun deleteTrigger(trigger: AutopilotTrigger) {
+        viewModelScope.launch {
+            autopilotRepository.deleteTrigger(autopilotId, trigger.id)
+            refresh()
+        }
+    }
 }
 
 data class AutopilotDetailUiState(
@@ -137,6 +172,8 @@ fun AutopilotDetailScreen(
     var showActions by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var editingTrigger by remember { mutableStateOf<AutopilotTrigger?>(null) }
+    var deletingTrigger by remember { mutableStateOf<AutopilotTrigger?>(null) }
 
     Scaffold(
         topBar = {
@@ -181,7 +218,13 @@ fun AutopilotDetailScreen(
         ) {
             when {
                 detail == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                else -> AutopilotDetailContent(state = state, onTogglePause = viewModel::togglePause)
+                else -> AutopilotDetailContent(
+                    state = state,
+                    onTogglePause = viewModel::togglePause,
+                    onEditTrigger = { editingTrigger = it },
+                    onToggleTrigger = viewModel::toggleTriggerEnabled,
+                    onRequestDeleteTrigger = { deletingTrigger = it },
+                )
             }
         }
     }
@@ -207,6 +250,31 @@ fun AutopilotDetailScreen(
                 showEditDialog = false
             },
             onDismiss = { showEditDialog = false },
+        )
+    }
+    editingTrigger?.let { trigger ->
+        TriggerEditDialog(
+            trigger = trigger,
+            onConfirm = { cron, tz ->
+                viewModel.updateTrigger(trigger, cron, tz)
+                editingTrigger = null
+            },
+            onDismiss = { editingTrigger = null },
+        )
+    }
+    deletingTrigger?.let { trigger ->
+        AlertDialog(
+            onDismissRequest = { deletingTrigger = null },
+            title = { Text(stringResource(R.string.autopilot_trigger_delete_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deletingTrigger = null
+                    viewModel.deleteTrigger(trigger)
+                }) { Text(stringResource(R.string.autopilot_trigger_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingTrigger = null }) { Text(stringResource(R.string.common_cancel)) }
+            },
         )
     }
 }
@@ -241,6 +309,9 @@ private fun AutopilotEditDialog(
 private fun AutopilotDetailContent(
     state: AutopilotDetailUiState,
     onTogglePause: () -> Unit,
+    onEditTrigger: (AutopilotTrigger) -> Unit,
+    onToggleTrigger: (AutopilotTrigger) -> Unit,
+    onRequestDeleteTrigger: (AutopilotTrigger) -> Unit,
 ) {
     val detail = state.detail!!
     val ap = detail.autopilot
@@ -276,7 +347,12 @@ private fun AutopilotDetailContent(
                 Text("Triggers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             items(detail.triggers, key = { it.id }) { trigger ->
-                TriggerRow(trigger = trigger)
+                TriggerRow(
+                    trigger = trigger,
+                    onEdit = { onEditTrigger(trigger) },
+                    onToggle = { onToggleTrigger(trigger) },
+                    onDelete = { onRequestDeleteTrigger(trigger) },
+                )
             }
         }
         // Runs.
@@ -294,24 +370,53 @@ private fun AutopilotDetailContent(
 }
 
 @Composable
-private fun TriggerRow(trigger: AutopilotTrigger) {
+private fun TriggerRow(
+    trigger: AutopilotTrigger,
+    onEdit: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             val icon = when (trigger.kind) {
-                ai.multica.android.data.model.AutopilotTriggerKind.SCHEDULE -> Icons.Filled.PlayArrow
-                ai.multica.android.data.model.AutopilotTriggerKind.WEBHOOK -> Icons.Filled.Webhook
-                ai.multica.android.data.model.AutopilotTriggerKind.API -> Icons.Filled.Bolt
+                AutopilotTriggerKind.SCHEDULE -> Icons.Filled.PlayArrow
+                AutopilotTriggerKind.WEBHOOK -> Icons.Filled.Webhook
+                AutopilotTriggerKind.API -> Icons.Filled.Bolt
             }
             Icon(icon, null)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(trigger.kind.name.lowercase().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(trigger.kind.name.lowercase().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                    if (!trigger.enabled) {
+                        Spacer(Modifier.width(6.dp))
+                        AssistChip(onClick = {}, label = { Text("Paused", style = MaterialTheme.typography.labelSmall) })
+                    }
+                }
                 if (trigger.cronExpression != null) {
                     Text("Cron: ${trigger.cronExpression}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (trigger.webhookUrl != null) {
                     Text(trigger.webhookUrl, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            // Edit (only schedule triggers have an editable cron/time/timezone).
+            if (trigger.kind == AutopilotTriggerKind.SCHEDULE) {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.autopilot_trigger_edit))
+                }
+            }
+            // Enable / pause toggle.
+            IconButton(onClick = onToggle) {
+                if (trigger.enabled) {
+                    Icon(Icons.Filled.Pause, contentDescription = stringResource(R.string.autopilot_trigger_disable))
+                } else {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.autopilot_trigger_enable))
+                }
+            }
+            // Delete.
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.autopilot_trigger_delete), tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -334,5 +439,135 @@ private fun RunRow(run: AutopilotRun) {
                 Text("${run.source} · ${run.triggeredAt.take(19).replace("T", " ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+/**
+ * Build a 5-field cron expression from a [ScheduleFrequency] and a "HH:mm" time string.
+ * Shared between CreateAutopilotScreen and the trigger edit dialog to keep the
+ * frequency→cron mapping in one place.
+ */
+fun buildCronFromFrequency(frequency: ScheduleFrequency, time: String): String {
+    val parts = time.split(":")
+    val hh = parts.getOrNull(0)?.padStart(2, '0') ?: "09"
+    val mm = parts.getOrNull(1)?.padStart(2, '0') ?: "00"
+    return when (frequency) {
+        ScheduleFrequency.HOURLY -> "0 * * * *"
+        ScheduleFrequency.DAILY -> "$mm $hh * * *"
+        ScheduleFrequency.WEEKDAYS -> "$mm $hh * * 1-5"
+        ScheduleFrequency.WEEKLY -> "$mm $hh * * 1"
+    }
+}
+
+/**
+ * Infer the best-matching [ScheduleFrequency] preset for a cron expression.
+ * Falls back to [ScheduleFrequency.DAILY] for unrecognized cron patterns so the
+ * editor always opens with a sensible default the user can adjust.
+ */
+fun inferFrequencyFromCron(cron: String?): ScheduleFrequency {
+    val parts = cron?.trim()?.split(" ").orEmpty()
+    if (parts.size == 5) {
+        val dow = parts[4]
+        when {
+            dow == "1-5" && parts[2] == "*" && parts[3] == "*" -> return ScheduleFrequency.WEEKDAYS
+            dow == "1" && parts[2] == "*" && parts[3] == "*" -> return ScheduleFrequency.WEEKLY
+            dow == "*" && parts[2] == "*" && parts[3] == "*" -> {
+                if (parts[0] == "0" && parts[1] == "*") return ScheduleFrequency.HOURLY
+                return ScheduleFrequency.DAILY
+            }
+        }
+    }
+    return ScheduleFrequency.DAILY
+}
+
+/** Extract a normalized "HH:mm" string from a cron expression, or null if none. */
+fun extractTimeFromCron(cron: String?): String? {
+    val parts = cron?.trim()?.split(" ").orEmpty()
+    if (parts.size == 5 && parts[1] != "*") {
+        val hh = parts[1].padStart(2, '0')
+        val mm = parts[0].padStart(2, '0')
+        return "$hh:$mm"
+    }
+    return null
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TriggerEditDialog(
+    trigger: AutopilotTrigger,
+    onConfirm: (cronExpression: String, timezone: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Seed editor from the trigger's existing cron + timezone.
+    var frequency by remember { mutableStateOf(inferFrequencyFromCron(trigger.cronExpression)) }
+    var time by remember { mutableStateOf(extractTimeFromCron(trigger.cronExpression) ?: "09:00") }
+    var timezone by remember { mutableStateOf(trigger.timezone ?: "Asia/Shanghai") }
+    var showTimePicker by remember { mutableStateOf(false) }
+    val cron = remember(frequency, time) { buildCronFromFrequency(frequency, time) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.autopilot_trigger_edit)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.autopilot_trigger_schedule), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                // Frequency presets.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    ScheduleFrequency.entries.forEach { freq ->
+                        FilterChip(
+                            selected = frequency == freq,
+                            onClick = { frequency = freq },
+                            label = { Text(freq.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                        )
+                    }
+                }
+                // Time picker (only meaningful for non-hourly).
+                if (frequency != ScheduleFrequency.HOURLY) {
+                    OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("${stringResource(R.string.autopilot_trigger_time)}: $time", modifier = Modifier.weight(1f))
+                        Icon(Icons.Filled.Schedule, null, modifier = Modifier.size(18.dp))
+                    }
+                }
+                OutlinedTextField(
+                    value = timezone,
+                    onValueChange = { timezone = it },
+                    label = { Text(stringResource(R.string.autopilot_trigger_timezone)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                AssistChip(onClick = {}, label = { Text("Cron: $cron", style = MaterialTheme.typography.labelSmall) })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(cron, timezone.trim().ifBlank { "UTC" }) }) {
+                Text(stringResource(R.string.common_ok))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
+    )
+
+    if (showTimePicker) {
+        val parts = time.split(":")
+        val tpState = rememberTimePickerState(
+            initialHour = parts.getOrNull(0)?.toIntOrNull() ?: 9,
+            initialMinute = parts.getOrNull(1)?.toIntOrNull() ?: 0,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text(stringResource(R.string.autopilot_trigger_time)) },
+            text = { TimePicker(state = tpState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val hh = tpState.hour.toString().padStart(2, '0')
+                    val mm = tpState.minute.toString().padStart(2, '0')
+                    time = "$hh:$mm"
+                    showTimePicker = false
+                }) { Text(stringResource(R.string.common_ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.common_cancel)) }
+            },
+        )
     }
 }

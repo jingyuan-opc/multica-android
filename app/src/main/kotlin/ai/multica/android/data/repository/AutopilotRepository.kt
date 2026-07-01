@@ -7,6 +7,7 @@ import ai.multica.android.core.network.apiCall
 import ai.multica.android.data.dto.CreateAutopilotRequest
 import ai.multica.android.data.dto.CreateAutopilotTriggerRequest
 import ai.multica.android.data.dto.UpdateAutopilotRequest
+import ai.multica.android.data.dto.UpdateAutopilotTriggerRequest
 import ai.multica.android.data.model.Autopilot
 import ai.multica.android.data.model.AutopilotAssigneeType
 import ai.multica.android.data.model.AutopilotExecutionMode
@@ -78,4 +79,15 @@ class AutopilotRepository @Inject constructor(
             CreateAutopilotTriggerRequest(kind = kind, cronExpression = cronExpression, timezone = timezone),
         )
     }
+
+    suspend fun updateTrigger(
+        autopilotId: String,
+        triggerId: String,
+        body: UpdateAutopilotTriggerRequest,
+    ): ApiResult<AutopilotTrigger> = apiCall(NetworkFactory.json) {
+        api.updateAutopilotTrigger(autopilotId, triggerId, body)
+    }
+
+    suspend fun deleteTrigger(autopilotId: String, triggerId: String): ApiResult<Unit> =
+        apiCall(NetworkFactory.json) { api.deleteAutopilotTrigger(autopilotId, triggerId) }
 }

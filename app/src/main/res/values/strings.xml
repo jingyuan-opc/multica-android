@@ -107,6 +107,8 @@
     <string name="squads_add_member">Add member</string>
     <string name="squads_remove_member">Remove member</string>
     <string name="squads_make_leader">Make leader</string>
+    <string name="squads_archive">Archive</string>
+    <string name="squads_archive_confirm">Archive this squad? Its open issues and autopilots will transfer to the leader. This cannot be undone.</string>
 
     <!-- Members -->
     <string name="members_title">Members</string>
@@ -133,6 +135,13 @@
     <string name="autopilot_trigger_kind">Trigger</string>
     <string name="autopilot_trigger_schedule">Schedule</string>
     <string name="autopilot_trigger_webhook">Webhook</string>
+    <string name="autopilot_trigger_edit">Edit trigger</string>
+    <string name="autopilot_trigger_delete">Delete trigger</string>
+    <string name="autopilot_trigger_delete_confirm">Delete this trigger?</string>
+    <string name="autopilot_trigger_enable">Enable</string>
+    <string name="autopilot_trigger_disable">Pause</string>
+    <string name="autopilot_trigger_time">Time</string>
+    <string name="autopilot_trigger_timezone">Timezone</string>
     <string name="autopilot_runs">Run history</string>
 
     <!-- Labels -->
