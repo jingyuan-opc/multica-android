@@ -251,6 +251,35 @@ class WsClient @Inject constructor(
                     val issueId = (issue.jsonObject["id"] as? JsonPrimitive)?.contentOrNull ?: return
                     _events.tryEmit(WsEvent.IssueUpdated(issueId, issue.jsonObject, actorId, actorType))
                 }
+                // ---- Entity lifecycle: best-effort id extraction.
+                // The list VMs only need a refresh signal; the id is decorative.
+                // Web payloads: agent events carry {agent:{id}}, project events
+                // {project:{id}} or {project_id}, member events {member:{user_id}}
+                // or {user_id}. squad/label/pin are `unknown` in the web type
+                // map so we try common shapes and fall back to "".
+                "agent:status", "agent:created", "agent:archived", "agent:restored" -> {
+                    val id = extractEntityId(payload, "agent") ?: extractFlatId(payload, "agent_id")
+                    _events.tryEmit(WsEvent.AgentChanged(id ?: "", actorId, actorType))
+                }
+                "squad:created", "squad:updated", "squad:deleted" -> {
+                    val id = extractEntityId(payload, "squad") ?: extractFlatId(payload, "squad_id")
+                    _events.tryEmit(WsEvent.SquadChanged(id ?: "", actorId, actorType))
+                }
+                "project:created", "project:updated", "project:deleted" -> {
+                    val id = extractEntityId(payload, "project") ?: extractFlatId(payload, "project_id")
+                    _events.tryEmit(WsEvent.ProjectChanged(id ?: "", actorId, actorType))
+                }
+                "label:created", "label:updated", "label:deleted" -> {
+                    val id = extractEntityId(payload, "label") ?: extractFlatId(payload, "label_id")
+                    _events.tryEmit(WsEvent.LabelChanged(id ?: "", actorId, actorType))
+                }
+                "member:added", "member:updated", "member:removed" -> {
+                    val id = extractEntityId(payload, "member") ?: extractFlatId(payload, "user_id") ?: extractFlatId(payload, "member_id")
+                    _events.tryEmit(WsEvent.MemberChanged(id ?: "", actorId, actorType))
+                }
+                "pin:created", "pin:deleted", "pin:reordered" -> {
+                    _events.tryEmit(WsEvent.PinChanged(actorId, actorType))
+                }
                 else -> {
                     _events.tryEmit(WsEvent.Unknown(type, envelope, actorId, actorType))
                 }
@@ -260,6 +289,17 @@ class WsClient @Inject constructor(
             // and we don't want a single bad payload to crash the loop.
         }
     }
+
+    /** Pull `id` (or `user_id` for members) out of a nested object payload like {agent:{id}}. */
+    private fun extractEntityId(payload: JsonObject, key: String): String? {
+        val obj = payload[key] as? JsonObject ?: return null
+        val idField = if (key == "member") "user_id" else "id"
+        return (obj[idField] as? JsonPrimitive)?.contentOrNull
+    }
+
+    /** Pull a flat id like {agent_id}/{project_id}/{user_id} from the payload. */
+    private fun extractFlatId(payload: JsonObject, key: String): String? =
+        (payload[key] as? JsonPrimitive)?.contentOrNull
 
     private fun onConnectionClosed() {
         val current = _state.value

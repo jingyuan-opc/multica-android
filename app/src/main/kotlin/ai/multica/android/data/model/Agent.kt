@@ -21,6 +21,9 @@ data class Agent(
     val model: String = "",
     @kotlinx.serialization.SerialName("thinking_level") val thinkingLevel: String = "",
     @kotlinx.serialization.SerialName("owner_id") val ownerId: String? = null,
+    val visibility: String = "workspace",
+    val skills: List<AgentSkillSummary> = emptyList(),
+    @kotlinx.serialization.SerialName("custom_args") val customArgs: List<String> = emptyList(),
     @kotlinx.serialization.SerialName("has_custom_env") val hasCustomEnv: Boolean = false,
     @kotlinx.serialization.SerialName("custom_env_key_count") val customEnvKeyCount: Int = 0,
     @kotlinx.serialization.SerialName("created_at") val createdAt: String = "",
@@ -33,4 +36,11 @@ data class Agent(
 data class AgentSkillSummary(
     val id: String,
     val name: String = "",
+    val description: String = "",
+)
+
+/** Response of POST /api/agents/{id}/cancel-tasks. */
+@Serializable
+data class CancelledCountResponse(
+    val cancelled: Int = 0,
 )

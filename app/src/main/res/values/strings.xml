@@ -82,4 +82,117 @@
     <string name="shortcut_issues_long">Browse issues</string>
     <string name="shortcut_projects_short">Projects</string>
     <string name="shortcut_projects_long">View projects</string>
+
+    <!-- Agents -->
+    <string name="agents_title">Agents</string>
+    <string name="agents_empty">No agents yet</string>
+    <string name="agents_archive">Archive</string>
+    <string name="agents_restore">Restore</string>
+    <string name="agents_archive_confirm">Archive this agent?</string>
+    <string name="agents_cancel_tasks">Cancel all tasks</string>
+    <string name="agents_visibility_workspace">Workspace</string>
+    <string name="agents_visibility_private">Private</string>
+    <string name="agents_instructions">Instructions</string>
+    <string name="agents_model">Model</string>
+    <string name="agents_runtime">Runtime</string>
+    <string name="agents_concurrency">Max concurrent tasks</string>
+    <string name="agents_status">Status</string>
+
+    <!-- Squads -->
+    <string name="squads_title">Squads</string>
+    <string name="squads_empty">No squads yet</string>
+    <string name="squads_members">Members</string>
+    <string name="squads_leader">Leader</string>
+    <string name="squads_instructions">Instructions</string>
+    <string name="squads_add_member">Add member</string>
+    <string name="squads_remove_member">Remove member</string>
+    <string name="squads_make_leader">Make leader</string>
+
+    <!-- Members -->
+    <string name="members_title">Members</string>
+    <string name="members_empty">No members</string>
+    <string name="members_role">Role</string>
+    <string name="members_role_owner">Owner</string>
+    <string name="members_role_admin">Admin</string>
+    <string name="members_role_member">Member</string>
+
+    <!-- Autopilots -->
+    <string name="autopilots_title">Autopilots</string>
+    <string name="autopilots_empty">No autopilots yet</string>
+    <string name="autopilots_new">New autopilot</string>
+    <string name="autopilots_pause">Pause</string>
+    <string name="autopilots_resume">Resume</string>
+    <string name="autopilots_trigger">Trigger now</string>
+    <string name="autopilots_delete">Delete</string>
+    <string name="autopilots_delete_confirm">Delete this autopilot?</string>
+    <string name="autopilot_title">Title</string>
+    <string name="autopilot_assignee">Assignee</string>
+    <string name="autopilot_mode">Execution mode</string>
+    <string name="autopilot_mode_create_issue">Create issue</string>
+    <string name="autopilot_mode_run_only">Run only</string>
+    <string name="autopilot_trigger_kind">Trigger</string>
+    <string name="autopilot_trigger_schedule">Schedule</string>
+    <string name="autopilot_trigger_webhook">Webhook</string>
+    <string name="autopilot_runs">Run history</string>
+
+    <!-- Labels -->
+    <string name="labels_title">Labels</string>
+    <string name="labels_empty">No labels yet</string>
+    <string name="labels_new">New label</string>
+    <string name="labels_name">Name</string>
+    <string name="labels_color">Color</string>
+    <string name="labels_delete_confirm">Delete this label?</string>
+    <string name="labels_manage">Manage labels</string>
+
+    <!-- Pins -->
+    <string name="pins_title">Pinned</string>
+    <string name="pins_empty">No pinned items</string>
+    <string name="pins_add">Pin to sidebar</string>
+    <string name="pins_remove">Unpin</string>
+
+    <!-- My Issues -->
+    <string name="my_issues_title">My Issues</string>
+    <string name="my_issues_scope_all">All</string>
+    <string name="my_issues_scope_assigned">Assigned</string>
+    <string name="my_issues_scope_created">Created</string>
+    <string name="my_issues_scope_agents">Agents</string>
+
+    <!-- Drawer -->
+    <string name="drawer_open">Open navigation</string>
+    <string name="drawer_my_issues">My Issues</string>
+    <string name="drawer_squads">Squads</string>
+    <string name="drawer_members">Members</string>
+    <string name="drawer_autopilots">Autopilots</string>
+    <string name="drawer_labels">Labels</string>
+    <string name="drawer_pinned">Pinned</string>
+    <string name="drawer_workspaces">Workspaces</string>
+
+    <!-- Issue detail (extended) -->
+    <string name="issue_properties">Properties</string>
+    <string name="issue_priority">Priority</string>
+    <string name="issue_assignee">Assignee</string>
+    <string name="issue_project">Project</string>
+    <string name="issue_labels">Labels</string>
+    <string name="issue_start_date">Start date</string>
+    <string name="issue_due_date">Due date</string>
+    <string name="issue_stage">Stage</string>
+    <string name="issue_sub_issues">Sub-issues</string>
+    <string name="issue_add_sub_issue">Add sub-issue</string>
+    <string name="issue_subscribers">Subscribers</string>
+    <string name="issue_subscribe">Subscribe</string>
+    <string name="issue_unsubscribe">Unsubscribe</string>
+    <string name="issue_copy_link">Copy link</string>
+    <string name="issue_delete">Delete issue</string>
+    <string name="issue_delete_confirm">Delete this issue?</string>
+    <string name="issue_mark_done">Mark done</string>
+    <string name="issue_unassigned">Unassigned</string>
+    <string name="issue_created_by">Created by</string>
+    <string name="issue_no_labels">No labels</string>
+
+    <!-- Project detail (extended) -->
+    <string name="project_lead">Lead</string>
+    <string name="project_progress">Progress</string>
+    <string name="project_copy_link">Copy link</string>
+    <string name="project_delete">Delete project</string>
+    <string name="project_delete_confirm">Delete this project?</string>
 </resources>

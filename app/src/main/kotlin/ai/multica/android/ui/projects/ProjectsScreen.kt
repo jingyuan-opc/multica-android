@@ -101,14 +101,15 @@ fun ProjectsScreen(
     contentPadding: PaddingValues,
     onOpenProject: (String) -> Unit,
     onCreateProject: () -> Unit,
-    forceRefreshOnAppear: Boolean = false,
+    refreshTrigger: Int = 0,
     viewModel: ProjectsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // 每次 tab 出现在屏幕上就强制 refresh,因为 Hilt VM 跨 tab 切换只 init 一次。
-    LaunchedEffect(forceRefreshOnAppear) {
-        if (forceRefreshOnAppear) viewModel.refresh()
+    // 每次 tab 出现在屏幕上就强制 refresh。用递增 Int token 作为 key
+    // 确保每次切回都 re-fire (布尔值在分支内恒真)。
+    LaunchedEffect(refreshTrigger) {
+        if (refreshTrigger > 0) viewModel.refresh()
     }
 
     Box(

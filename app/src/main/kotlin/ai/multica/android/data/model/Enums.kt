@@ -170,3 +170,70 @@ enum class SortDirection {
     @SerialName("asc") ASC,
     @SerialName("desc") DESC
 }
+
+// ============================================================
+// Autopilots
+// ============================================================
+
+@Serializable
+enum class AutopilotStatus {
+    @SerialName("active") ACTIVE,
+    @SerialName("paused") PAUSED,
+    @SerialName("archived") ARCHIVED
+}
+
+@Serializable
+enum class AutopilotExecutionMode {
+    @SerialName("create_issue") CREATE_ISSUE,
+    @SerialName("run_only") RUN_ONLY
+}
+
+@Serializable
+enum class AutopilotAssigneeType {
+    @SerialName("agent") AGENT,
+    @SerialName("squad") SQUAD
+}
+
+@Serializable
+enum class AutopilotTriggerKind {
+    @SerialName("schedule") SCHEDULE,
+    @SerialName("webhook") WEBHOOK,
+    @SerialName("api") API
+}
+
+@Serializable
+enum class AutopilotRunStatus {
+    @SerialName("issue_created") ISSUE_CREATED,
+    @SerialName("running") RUNNING,
+    @SerialName("completed") COMPLETED,
+    @SerialName("failed") FAILED,
+    @SerialName("skipped") SKIPPED
+}
+
+@Serializable
+enum class AutopilotRunSource {
+    @SerialName("schedule") SCHEDULE,
+    @SerialName("manual") MANUAL,
+    @SerialName("webhook") WEBHOOK,
+    @SerialName("api") API
+}
+
+// ============================================================
+// Pins
+// ============================================================
+
+@Serializable
+enum class PinnedItemType {
+    @SerialName("issue") ISSUE,
+    @SerialName("project") PROJECT
+}
+
+// ============================================================
+// Squads
+// ============================================================
+
+@Serializable
+enum class SquadMemberType {
+    @SerialName("agent") AGENT,
+    @SerialName("member") MEMBER
+}

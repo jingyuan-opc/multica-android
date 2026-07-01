@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,12 +25,19 @@ import ai.multica.android.data.model.Workspace
 @Composable
 fun HomeTopBar(
     viewModel: HomeViewModel = hiltViewModel(),
+    onMenuClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var menuOpen by remember { mutableStateOf(false) }
 
     CenterAlignedTopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onMenuClick) {
+                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+            }
+        },
         title = {
             WorkspaceSwitcherButton(
                 workspace = state.activeWorkspace,
@@ -37,6 +46,9 @@ fun HomeTopBar(
             )
         },
         actions = {
+            IconButton(onClick = onSearchClick) {
+                Icon(Icons.Filled.Search, contentDescription = "Search")
+            }
             IconButton(onClick = { viewModel.refresh() }) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }

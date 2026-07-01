@@ -47,8 +47,32 @@ data class IssueReaction(
 @Serializable
 data class Label(
     val id: String,
+    @kotlinx.serialization.SerialName("workspace_id") val workspaceId: String = "",
     val name: String,
-    val color: String? = null,
+    /** Lowercase hex color, e.g. "#3b82f6". Default applied client-side. */
+    val color: String? = "#3b82f6",
+    @kotlinx.serialization.SerialName("created_at") val createdAt: String = "",
+    @kotlinx.serialization.SerialName("updated_at") val updatedAt: String = "",
+)
+
+@Serializable
+data class ListLabelsResponse(
+    val labels: List<Label> = emptyList(),
+    val total: Long = 0,
+)
+
+@Serializable
+data class IssueLabelsResponse(
+    val labels: List<Label> = emptyList(),
+)
+
+@Serializable
+data class IssueSubscriber(
+    @kotlinx.serialization.SerialName("issue_id") val issueId: String,
+    @kotlinx.serialization.SerialName("user_type") val userType: String,
+    @kotlinx.serialization.SerialName("user_id") val userId: String,
+    val reason: String = "",
+    @kotlinx.serialization.SerialName("created_at") val createdAt: String = "",
 )
 
 @Serializable
@@ -104,4 +128,28 @@ data class IssueAssigneeGroup(
 @Serializable
 data class GroupedIssuesResponse(
     val groups: List<IssueAssigneeGroup> = emptyList(),
+)
+
+@Serializable
+data class QuickCreateIssueResponse(
+    @kotlinx.serialization.SerialName("task_id") val taskId: String,
+)
+
+/** GET /api/issues/{id}/children → { issues: Issue[] }. */
+@Serializable
+data class ChildIssuesResponse(
+    val issues: List<Issue> = emptyList(),
+)
+
+@Serializable
+data class ChildIssueProgressEntry(
+    @kotlinx.serialization.SerialName("parent_issue_id") val parentIssueId: String,
+    val total: Int = 0,
+    val done: Int = 0,
+)
+
+/** GET /api/issues/child-progress → { progress: [...] }. */
+@Serializable
+data class ChildIssueProgressResponse(
+    val progress: List<ChildIssueProgressEntry> = emptyList(),
 )

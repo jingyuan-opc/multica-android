@@ -39,6 +39,15 @@ interface MulticaApi {
     @GET("api/workspaces")
     suspend fun listWorkspaces(): Response<List<Workspace>>
 
+    @GET("api/workspaces/{id}")
+    suspend fun getWorkspace(@Path("id") id: String): Response<Workspace>
+
+    @POST("api/workspaces")
+    suspend fun createWorkspace(@Body body: CreateWorkspaceRequest): Response<Workspace>
+
+    @PATCH("api/workspaces/{id}")
+    suspend fun updateWorkspace(@Path("id") id: String, @Body body: UpdateWorkspaceRequest): Response<Workspace>
+
     // -------- Inbox --------
 
     /** Returns a bare JSON array — the spec response shape is `InboxItem[]`. */
@@ -78,14 +87,100 @@ interface MulticaApi {
     @POST("api/projects")
     suspend fun createProject(@Body body: ai.multica.android.data.dto.CreateProjectRequest): Response<Project>
 
+    @PUT("api/projects/{id}")
+    suspend fun updateProject(@Path("id") id: String, @Body body: UpdateProjectRequest): Response<Project>
+
+    @DELETE("api/projects/{id}")
+    suspend fun deleteProject(@Path("id") id: String): Response<Unit>
+
+    @GET("api/projects/search")
+    suspend fun searchProjects(
+        @Query("q") q: String,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null,
+        @Query("include_closed") includeClosed: Boolean? = null,
+    ): Response<SearchProjectsResponse>
+
     @GET("api/workspaces/{id}/members")
     suspend fun listMembers(@Path("id") workspaceId: String): Response<List<MemberWithUser>>
+
+    @PATCH("api/workspaces/{workspaceId}/members/{memberId}")
+    suspend fun updateMember(
+        @Path("workspaceId") workspaceId: String,
+        @Path("memberId") memberId: String,
+        @Body body: UpdateMemberRequest,
+    ): Response<MemberWithUser>
+
+    @DELETE("api/workspaces/{workspaceId}/members/{memberId}")
+    suspend fun deleteMember(
+        @Path("workspaceId") workspaceId: String,
+        @Path("memberId") memberId: String,
+    ): Response<Unit>
+
+    @GET("api/invitations")
+    suspend fun listMyInvitations(): Response<List<Invitation>>
+
+    @POST("api/invitations/{id}/accept")
+    suspend fun acceptInvitation(@Path("id") id: String): Response<MemberWithUser>
+
+    @POST("api/invitations/{id}/decline")
+    suspend fun declineInvitation(@Path("id") id: String): Response<Unit>
+
+    // -------- Agents --------
 
     @GET("api/agents")
     suspend fun listAgents(@Query("include_archived") includeArchived: Boolean = false): Response<List<Agent>>
 
+    @GET("api/agents/{id}")
+    suspend fun getAgent(@Path("id") id: String): Response<Agent>
+
+    @POST("api/agents")
+    suspend fun createAgent(@Body body: CreateAgentRequest): Response<Agent>
+
+    @PUT("api/agents/{id}")
+    suspend fun updateAgent(@Path("id") id: String, @Body body: UpdateAgentRequest): Response<Agent>
+
+    @POST("api/agents/{id}/archive")
+    suspend fun archiveAgent(@Path("id") id: String): Response<Agent>
+
+    @POST("api/agents/{id}/restore")
+    suspend fun restoreAgent(@Path("id") id: String): Response<Agent>
+
+    @POST("api/agents/{id}/cancel-tasks")
+    suspend fun cancelAgentTasks(@Path("id") id: String): Response<CancelledCountResponse>
+
+    // -------- Squads --------
+
     @GET("api/squads")
     suspend fun listSquads(): Response<List<Squad>>
+
+    @GET("api/squads/{id}")
+    suspend fun getSquad(@Path("id") id: String): Response<Squad>
+
+    @POST("api/squads")
+    suspend fun createSquad(@Body body: CreateSquadRequest): Response<Squad>
+
+    @PUT("api/squads/{id}")
+    suspend fun updateSquad(@Path("id") id: String, @Body body: UpdateSquadRequest): Response<Squad>
+
+    @DELETE("api/squads/{id}")
+    suspend fun deleteSquad(@Path("id") id: String): Response<Unit>
+
+    @GET("api/squads/{id}/members")
+    suspend fun listSquadMembers(@Path("id") id: String): Response<List<SquadMember>>
+
+    @POST("api/squads/{id}/members")
+    suspend fun addSquadMember(@Path("id") id: String, @Body body: AddSquadMemberRequest): Response<SquadMember>
+
+    /** DELETE with JSON body — uses @HTTP for explicit body support. */
+    @HTTP(method = "DELETE", path = "api/squads/{id}/members", hasBody = true)
+    suspend fun removeSquadMember(@Path("id") id: String, @Body body: RemoveSquadMemberRequest): Response<Unit>
+
+    @PATCH("api/squads/{id}/members/role")
+    suspend fun updateSquadMemberRole(@Path("id") id: String, @Body body: UpdateSquadMemberRoleRequest): Response<SquadMember>
+
+    @GET("api/squads/{id}/members/status")
+    suspend fun getSquadMemberStatus(@Path("id") id: String): Response<SquadMemberStatusListResponse>
 
     // -------- Issues --------
 
@@ -136,6 +231,57 @@ interface MulticaApi {
         @Body body: UpdateIssueRequest,
     ): Response<Issue>
 
+    @DELETE("api/issues/{id}")
+    suspend fun deleteIssue(@Path("id") id: String): Response<Unit>
+
+    @POST("api/issues/quick-create")
+    suspend fun quickCreateIssue(@Body body: QuickCreateIssueRequest): Response<QuickCreateIssueResponse>
+
+    @POST("api/issues/batch-update")
+    suspend fun batchUpdateIssues(@Body body: BatchUpdateIssuesRequest): Response<BatchUpdateIssuesResponse>
+
+    @POST("api/issues/batch-delete")
+    suspend fun batchDeleteIssues(@Body body: BatchDeleteIssuesRequest): Response<BatchDeleteIssuesResponse>
+
+    @GET("api/issues/{id}/children")
+    suspend fun listChildIssues(@Path("id") id: String): Response<ChildIssuesResponse>
+
+    @GET("api/issues/child-progress")
+    suspend fun getChildIssueProgress(): Response<ChildIssueProgressResponse>
+
+    // -------- Issue reactions --------
+
+    @POST("api/issues/{id}/reactions")
+    suspend fun addIssueReaction(@Path("id") id: String, @Body body: ReactionRequest): Response<IssueReaction>
+
+    @HTTP(method = "DELETE", path = "api/issues/{id}/reactions", hasBody = true)
+    suspend fun removeIssueReaction(@Path("id") id: String, @Body body: ReactionRequest): Response<Unit>
+
+    // -------- Issue subscribers --------
+
+    @GET("api/issues/{id}/subscribers")
+    suspend fun listIssueSubscribers(@Path("id") id: String): Response<List<IssueSubscriber>>
+
+    @POST("api/issues/{id}/subscribe")
+    suspend fun subscribeToIssue(@Path("id") id: String, @Body body: SubscribeRequest): Response<Unit>
+
+    @POST("api/issues/{id}/unsubscribe")
+    suspend fun unsubscribeFromIssue(@Path("id") id: String, @Body body: SubscribeRequest): Response<Unit>
+
+    // -------- Issue labels --------
+
+    @GET("api/issues/{issueId}/labels")
+    suspend fun listLabelsForIssue(@Path("issueId") issueId: String): Response<IssueLabelsResponse>
+
+    @POST("api/issues/{issueId}/labels")
+    suspend fun attachLabel(@Path("issueId") issueId: String, @Body body: AttachLabelRequest): Response<IssueLabelsResponse>
+
+    @DELETE("api/issues/{issueId}/labels/{labelId}")
+    suspend fun detachLabel(
+        @Path("issueId") issueId: String,
+        @Path("labelId") labelId: String,
+    ): Response<IssueLabelsResponse>
+
     // -------- Timeline / Comments --------
 
     @GET("api/issues/{id}/timeline")
@@ -173,4 +319,93 @@ interface MulticaApi {
         @Path("id") commentId: String,
         @Body body: ReactionRequest,
     ): Response<Unit>
+
+    // -------- Labels (workspace-scoped CRUD) --------
+
+    @GET("api/labels")
+    suspend fun listLabels(): Response<ListLabelsResponse>
+
+    @GET("api/labels/{id}")
+    suspend fun getLabel(@Path("id") id: String): Response<Label>
+
+    @POST("api/labels")
+    suspend fun createLabel(@Body body: CreateLabelRequest): Response<Label>
+
+    @PUT("api/labels/{id}")
+    suspend fun updateLabel(@Path("id") id: String, @Body body: UpdateLabelRequest): Response<Label>
+
+    @DELETE("api/labels/{id}")
+    suspend fun deleteLabel(@Path("id") id: String): Response<Unit>
+
+    // -------- Pins --------
+
+    @GET("api/pins")
+    suspend fun listPins(): Response<List<PinnedItem>>
+
+    @POST("api/pins")
+    suspend fun createPin(@Body body: CreatePinRequest): Response<PinnedItem>
+
+    @DELETE("api/pins/{itemType}/{itemId}")
+    suspend fun deletePin(
+        @Path("itemType") itemType: String,
+        @Path("itemId") itemId: String,
+    ): Response<Unit>
+
+    @PUT("api/pins/reorder")
+    suspend fun reorderPins(@Body body: ReorderPinsRequest): Response<Unit>
+
+    // -------- Autopilots --------
+
+    @GET("api/autopilots")
+    suspend fun listAutopilots(@Query("status") status: String? = null): Response<ListAutopilotsResponse>
+
+    @GET("api/autopilots/{id}")
+    suspend fun getAutopilot(@Path("id") id: String): Response<GetAutopilotResponse>
+
+    @POST("api/autopilots")
+    suspend fun createAutopilot(@Body body: CreateAutopilotRequest): Response<Autopilot>
+
+    @PATCH("api/autopilots/{id}")
+    suspend fun updateAutopilot(@Path("id") id: String, @Body body: UpdateAutopilotRequest): Response<Autopilot>
+
+    @DELETE("api/autopilots/{id}")
+    suspend fun deleteAutopilot(@Path("id") id: String): Response<Unit>
+
+    @POST("api/autopilots/{id}/trigger")
+    suspend fun triggerAutopilot(@Path("id") id: String): Response<AutopilotRun>
+
+    @GET("api/autopilots/{id}/runs")
+    suspend fun listAutopilotRuns(
+        @Path("id") id: String,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null,
+    ): Response<ListAutopilotRunsResponse>
+
+    @POST("api/autopilots/{autopilotId}/triggers")
+    suspend fun createAutopilotTrigger(
+        @Path("autopilotId") autopilotId: String,
+        @Body body: CreateAutopilotTriggerRequest,
+    ): Response<AutopilotTrigger>
+
+    @PATCH("api/autopilots/{autopilotId}/triggers/{triggerId}")
+    suspend fun updateAutopilotTrigger(
+        @Path("autopilotId") autopilotId: String,
+        @Path("triggerId") triggerId: String,
+        @Body body: UpdateAutopilotTriggerRequest,
+    ): Response<AutopilotTrigger>
+
+    @DELETE("api/autopilots/{autopilotId}/triggers/{triggerId}")
+    suspend fun deleteAutopilotTrigger(
+        @Path("autopilotId") autopilotId: String,
+        @Path("triggerId") triggerId: String,
+    ): Response<Unit>
+
+    @POST("api/autopilots/{id}/collaborators")
+    suspend fun grantAutopilotAccess(@Path("id") id: String, @Body body: CollaboratorRequest): Response<AutopilotCollaboratorsResponse>
+
+    @DELETE("api/autopilots/{id}/collaborators/{userId}")
+    suspend fun revokeAutopilotAccess(
+        @Path("id") id: String,
+        @Path("userId") userId: String,
+    ): Response<AutopilotCollaboratorsResponse>
 }

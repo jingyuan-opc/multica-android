@@ -7,8 +7,10 @@ import ai.multica.android.core.auth.WorkspacePreference
 import ai.multica.android.core.auth.WorkspaceStore
 import ai.multica.android.core.network.ApiResult
 import ai.multica.android.data.model.InboxWorkspaceUnread
+import ai.multica.android.data.model.PinnedItem
 import ai.multica.android.data.model.Workspace
 import ai.multica.android.data.repository.InboxRepository
+import ai.multica.android.data.repository.PinRepository
 import ai.multica.android.data.repository.WorkspaceRepository
 import ai.multica.android.domain.InboxDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,16 +40,31 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val workspaceRepository: WorkspaceRepository,
     private val inboxRepository: InboxRepository,
+    private val pinRepository: PinRepository,
     private val workspaceStore: WorkspaceStore,
     private val workspacePreference: WorkspacePreference,
     private val workspaceEvents: WorkspaceEvents,
+    private val realtimeManager: ai.multica.android.realtime.RealtimeManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState())
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
+    private var pinJob: kotlinx.coroutines.Job? = null
 
     init {
         loadInitial()
+        observeRealtime()
+    }
+
+    private fun observeRealtime() {
+        pinJob?.cancel()
+        pinJob = viewModelScope.launch {
+            realtimeManager.events.collect { event ->
+                // Pin changes from another session/device should update the
+                // drawer's pinned list immediately.
+                if (event is ai.multica.android.realtime.WsEvent.PinChanged) loadPins()
+            }
+        }
     }
 
     private fun loadInitial() {
@@ -85,6 +102,7 @@ class HomeViewModel @Inject constructor(
                     }
                     workspaceEvents.emit(active.id)
                     refreshUnreadSummary()
+                    loadPins()
                 }
                 is ApiResult.HttpError -> {
                     _state.update { it.copy(isLoading = false, errorMessage = result.message) }
@@ -126,8 +144,20 @@ class HomeViewModel @Inject constructor(
                     val summary = result.data
                     val activeId = _state.value.activeWorkspace?.id
                     val hasOther = InboxDedup.hasOtherWorkspaceUnread(summary, activeId)
-                    _state.update { it.copy(unreadSummary = summary, hasOtherWorkspaceUnread = hasOther) }
+                    val total = summary.sumOf { it.count }.toInt()
+                    _state.update {
+                        it.copy(unreadSummary = summary, hasOtherWorkspaceUnread = hasOther, totalUnread = total)
+                    }
                 }
+                else -> Unit
+            }
+        }
+    }
+
+    private fun loadPins() {
+        viewModelScope.launch {
+            when (val result = pinRepository.list()) {
+                is ApiResult.Success -> _state.update { it.copy(pins = result.data) }
                 else -> Unit
             }
         }
@@ -159,5 +189,7 @@ data class HomeUiState(
     val activeWorkspace: Workspace? = null,
     val unreadSummary: List<InboxWorkspaceUnread> = emptyList(),
     val hasOtherWorkspaceUnread: Boolean = false,
+    val totalUnread: Int = 0,
+    val pins: List<PinnedItem>? = null,
     val errorMessage: String? = null,
 )

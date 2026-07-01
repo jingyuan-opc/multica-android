@@ -5,18 +5,14 @@ import ai.multica.android.core.network.ApiResult
 import ai.multica.android.core.network.MulticaApi
 import ai.multica.android.core.network.NetworkFactory
 import ai.multica.android.core.network.apiCall
+import ai.multica.android.data.dto.CreateWorkspaceRequest
+import ai.multica.android.data.dto.UpdateWorkspaceRequest
 import ai.multica.android.data.model.Workspace
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Owns the workspace list and the currently-active workspace.
- *
- * - On login, call [loadActive] to fetch the list, persist the first
- *   one (or the user's previously-selected one) into [WorkspaceStore]
- *   so AuthInterceptor starts sending the right `X-Workspace-Slug`.
- * - On workspace switch, call [setActive] which updates the store
- *   and triggers a re-fetch of workspace-scoped data.
  */
 @Singleton
 class WorkspaceRepository @Inject constructor(
@@ -26,6 +22,17 @@ class WorkspaceRepository @Inject constructor(
 
     suspend fun list(): ApiResult<List<Workspace>> =
         apiCall(NetworkFactory.json) { api.listWorkspaces() }
+
+    suspend fun get(id: String): ApiResult<Workspace> =
+        apiCall(NetworkFactory.json) { api.getWorkspace(id) }
+
+    suspend fun create(name: String, slug: String, description: String? = null): ApiResult<Workspace> =
+        apiCall(NetworkFactory.json) {
+            api.createWorkspace(CreateWorkspaceRequest(name = name.trim(), slug = slug.trim(), description = description))
+        }
+
+    suspend fun update(id: String, body: UpdateWorkspaceRequest): ApiResult<Workspace> =
+        apiCall(NetworkFactory.json) { api.updateWorkspace(id, body) }
 
     /**
      * Choose a workspace as the active one. Idempotent: passing the

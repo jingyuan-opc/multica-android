@@ -145,6 +145,77 @@ private fun AppRoot(
                 },
             )
         }
+        // --- New feature routes (drawer + detail destinations) ---
+        composable("agent/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id") ?: return@composable
+            ai.multica.android.ui.agents.AgentDetailScreen(onBack = { navController.popBackStack() })
+        }
+        composable("squad/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            ai.multica.android.ui.squads.SquadDetailScreen(onBack = { navController.popBackStack() })
+        }
+        composable("member/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            ai.multica.android.ui.members.MemberDetailScreen(
+                onBack = { navController.popBackStack() },
+                onOpenIssue = { issueId -> navController.navigate("issue/$issueId") },
+            )
+        }
+        composable("autopilot/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+            ai.multica.android.ui.autopilots.AutopilotDetailScreen(onBack = { navController.popBackStack() })
+        }
+        composable("autopilots") {
+            ai.multica.android.ui.autopilots.AutopilotsScreen(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                onOpenAutopilot = { id -> navController.navigate("autopilot/$id") },
+                onCreateAutopilot = { navController.navigate("create-autopilot") },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable("create-autopilot") {
+            ai.multica.android.ui.autopilots.CreateAutopilotScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { id ->
+                    navController.popBackStack()
+                    navController.navigate("autopilot/$id")
+                },
+            )
+        }
+        composable("squads") {
+            ai.multica.android.ui.squads.SquadsScreen(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                onOpenSquad = { id -> navController.navigate("squad/$id") },
+                onBack = { navController.popBackStack() },
+                onCreateSquad = { navController.navigate("create-squad") },
+            )
+        }
+        composable("create-squad") {
+            ai.multica.android.ui.squads.CreateSquadScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { id -> navController.popBackStack(); navController.navigate("squad/$id") },
+            )
+        }
+        composable("members") {
+            ai.multica.android.ui.members.MembersScreen(
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                onOpenMember = { id -> navController.navigate("member/$id") },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable("labels") {
+            ai.multica.android.ui.labels.LabelsScreen(onBack = { navController.popBackStack() })
+        }
+        composable("my-issues") {
+            ai.multica.android.ui.myissues.MyIssuesScreen(
+                onBack = { navController.popBackStack() },
+                onOpenIssue = { issueId -> navController.navigate("issue/$issueId") },
+            )
+        }
+        composable("search") {
+            ai.multica.android.ui.search.GlobalSearchScreen(
+                onBack = { navController.popBackStack() },
+                onOpenIssue = { issueId -> navController.navigate("issue/$issueId") },
+                onOpenProject = { projectId -> navController.navigate("project/$projectId") },
+            )
+        }
     }
 }
 

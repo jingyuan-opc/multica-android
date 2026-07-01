@@ -94,6 +94,52 @@ sealed interface WsEvent {
         override val actorType: String?,
     ) : WsEvent
 
+    // ---- Entity lifecycle events (workspace-scoped).
+    // List screens collect these to refresh when another session mutates an
+    // agent / squad / project / label / member / pin. The server emits these
+    // under the workspace scope we auto-subscribe on connect.
+
+    /** Agent created/archived/restored/status change. entityId is the agent id. */
+    data class AgentChanged(
+        val entityId: String,
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
+    /** Squad created/updated/deleted. */
+    data class SquadChanged(
+        val entityId: String,
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
+    /** Project created/updated/deleted. */
+    data class ProjectChanged(
+        val entityId: String,
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
+    /** Label created/updated/deleted. */
+    data class LabelChanged(
+        val entityId: String,
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
+    /** Workspace member added/updated/removed. entityId is the user id. */
+    data class MemberChanged(
+        val entityId: String,
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
+    /** Pin created/deleted/reordered — the user's sidebar changed. */
+    data class PinChanged(
+        override val actorId: String?,
+        override val actorType: String?,
+    ) : WsEvent
+
     data class AuthAck(val raw: JsonObject) : WsEvent {
         override val actorId: String? = null
         override val actorType: String? = null

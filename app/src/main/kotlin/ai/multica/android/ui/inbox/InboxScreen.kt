@@ -86,7 +86,12 @@ fun InboxScreen(
                         items(state.displayed, key = { it.id }) { item ->
                             InboxRow(
                                 item = item,
-                                onClick = { item.issueId?.let(onOpenIssue) },
+                                onClick = {
+                                    // Tapping an item marks it read (mirrors web
+                                    // behavior) and opens the related issue.
+                                    if (!item.read) viewModel.markRead(item)
+                                    item.issueId?.let(onOpenIssue)
+                                },
                                 onMarkRead = { viewModel.markRead(item) },
                                 onArchive = { viewModel.archive(item) },
                             )

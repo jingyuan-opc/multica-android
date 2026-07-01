@@ -4,10 +4,13 @@ import ai.multica.android.core.network.ApiResult
 import ai.multica.android.core.network.MulticaApi
 import ai.multica.android.core.network.NetworkFactory
 import ai.multica.android.core.network.apiCall
+import ai.multica.android.data.dto.UpdateProjectRequest
 import ai.multica.android.data.model.ListProjectsResponse
 import ai.multica.android.data.model.Project
-import ai.multica.android.data.model.ProjectStatus
+import ai.multica.android.data.model.ProjectLeadType
 import ai.multica.android.data.model.ProjectPriority
+import ai.multica.android.data.model.ProjectStatus
+import ai.multica.android.data.model.SearchProjectsResponse
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,4 +47,32 @@ class ProjectRepository @Inject constructor(
             )
         )
     }
+
+    suspend fun update(
+        id: String,
+        title: String? = null,
+        description: String? = null,
+        status: ProjectStatus? = null,
+        priority: ProjectPriority? = null,
+        leadType: ProjectLeadType? = null,
+        leadId: String? = null,
+    ): ApiResult<Project> = apiCall(NetworkFactory.json) {
+        api.updateProject(
+            id,
+            UpdateProjectRequest(
+                title = title?.trim(),
+                description = description?.trim(),
+                status = status?.name?.lowercase(),
+                priority = priority?.name?.lowercase(),
+                leadType = leadType?.name?.lowercase(),
+                leadId = leadId,
+            ),
+        )
+    }
+
+    suspend fun delete(id: String): ApiResult<Unit> =
+        apiCall(NetworkFactory.json) { api.deleteProject(id) }
+
+    suspend fun search(q: String, limit: Int = 20): ApiResult<SearchProjectsResponse> =
+        apiCall(NetworkFactory.json) { api.searchProjects(q = q, limit = limit) }
 }

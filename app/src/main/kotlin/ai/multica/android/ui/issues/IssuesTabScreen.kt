@@ -209,7 +209,7 @@ fun IssuesTabScreen(
     contentPadding: PaddingValues,
     onOpenIssue: (String) -> Unit,
     onCreateIssue: () -> Unit,
-    forceRefreshOnAppear: Boolean = false,
+    refreshTrigger: Int = 0,
     viewModel: IssuesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -218,8 +218,10 @@ fun IssuesTabScreen(
 
     // 每次 tab 出现在屏幕上(切回 Issues)就强制 refresh,
     // 因为 Hilt VM 跨 tab 切换只 init 一次,不重新拉数据。
-    LaunchedEffect(forceRefreshOnAppear) {
-        if (forceRefreshOnAppear) viewModel.refresh()
+    // 用一个递增的 Int token 作为 key,确保每次切回都重新触发
+    // (布尔值在分支内恒真,LaunchedEffect 不会 re-fire)。
+    LaunchedEffect(refreshTrigger) {
+        if (refreshTrigger > 0) viewModel.refresh()
     }
 
     Box(

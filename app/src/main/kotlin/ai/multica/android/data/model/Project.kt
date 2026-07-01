@@ -29,3 +29,23 @@ data class ListProjectsResponse(
     val projects: List<Project> = emptyList(),
     val total: Long = 0,
 )
+
+@Serializable
+data class SearchProjectResult(
+    val id: String,
+    @kotlinx.serialization.SerialName("workspace_id") val workspaceId: String = "",
+    val title: String,
+    val description: String? = null,
+    val icon: String? = null,
+    val status: ProjectStatus = ProjectStatus.PLANNED,
+    val priority: ProjectPriority = ProjectPriority.NONE,
+    @kotlinx.serialization.SerialName("created_at") val createdAt: String = "",
+    @kotlinx.serialization.SerialName("match_source") val matchSource: String = "title",
+    @kotlinx.serialization.SerialName("matched_snippet") val matchedSnippet: String? = null,
+)
+
+@Serializable
+data class SearchProjectsResponse(
+    val projects: List<SearchProjectResult> = emptyList(),
+    val total: Long = 0,
+)
