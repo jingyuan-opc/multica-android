@@ -150,6 +150,12 @@ private fun AppRoot(
             val id = backStackEntry.arguments?.getString("id") ?: return@composable
             ai.multica.android.ui.agents.AgentDetailScreen(onBack = { navController.popBackStack() })
         }
+        composable("create-agent") {
+            ai.multica.android.ui.agents.CreateAgentScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { id -> navController.popBackStack(); navController.navigate("agent/$id") },
+            )
+        }
         composable("squad/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
             ai.multica.android.ui.squads.SquadDetailScreen(onBack = { navController.popBackStack() })
         }

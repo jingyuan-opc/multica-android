@@ -86,6 +86,7 @@
     <!-- Agents -->
     <string name="agents_title">Agents</string>
     <string name="agents_empty">No agents yet</string>
+    <string name="agents_new">New agent</string>
     <string name="agents_archive">Archive</string>
     <string name="agents_restore">Restore</string>
     <string name="agents_archive_confirm">Archive this agent?</string>
@@ -143,6 +144,8 @@
     <string name="autopilot_trigger_time">Time</string>
     <string name="autopilot_trigger_timezone">Timezone</string>
     <string name="autopilot_runs">Run history</string>
+    <string name="autopilot_collaborators">Collaborators</string>
+    <string name="autopilot_grant_access">Grant access</string>
 
     <!-- Labels -->
     <string name="labels_title">Labels</string>
@@ -175,6 +178,8 @@
     <string name="drawer_labels">Labels</string>
     <string name="drawer_pinned">Pinned</string>
     <string name="drawer_workspaces">Workspaces</string>
+    <string name="drawer_section_personal">Personal</string>
+    <string name="drawer_section_workspace">Workspace</string>
 
     <!-- Issue detail (extended) -->
     <string name="issue_properties">Properties</string>

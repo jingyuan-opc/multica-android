@@ -8,8 +8,10 @@ import ai.multica.android.data.dto.CreateAutopilotRequest
 import ai.multica.android.data.dto.CreateAutopilotTriggerRequest
 import ai.multica.android.data.dto.UpdateAutopilotRequest
 import ai.multica.android.data.dto.UpdateAutopilotTriggerRequest
+import ai.multica.android.data.dto.CollaboratorRequest
 import ai.multica.android.data.model.Autopilot
 import ai.multica.android.data.model.AutopilotAssigneeType
+import ai.multica.android.data.model.AutopilotCollaboratorsResponse
 import ai.multica.android.data.model.AutopilotExecutionMode
 import ai.multica.android.data.model.AutopilotRun
 import ai.multica.android.data.model.AutopilotStatus
@@ -90,4 +92,12 @@ class AutopilotRepository @Inject constructor(
 
     suspend fun deleteTrigger(autopilotId: String, triggerId: String): ApiResult<Unit> =
         apiCall(NetworkFactory.json) { api.deleteAutopilotTrigger(autopilotId, triggerId) }
+
+    // --- Collaborators (manage access) ---
+
+    suspend fun grantAccess(autopilotId: String, userId: String): ApiResult<AutopilotCollaboratorsResponse> =
+        apiCall(NetworkFactory.json) { api.grantAutopilotAccess(autopilotId, CollaboratorRequest(userId = userId)) }
+
+    suspend fun revokeAccess(autopilotId: String, userId: String): ApiResult<AutopilotCollaboratorsResponse> =
+        apiCall(NetworkFactory.json) { api.revokeAutopilotAccess(autopilotId, userId) }
 }

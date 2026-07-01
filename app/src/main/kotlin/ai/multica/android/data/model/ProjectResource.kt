@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -42,6 +42,25 @@ data class ProjectResource(
     val position: Int = 0,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("created_by") val createdBy: String? = null,
+) {
+    /** Best-effort extraction of a github repo url from resource_ref JSON. */
+    val githubUrl: String?
+        get() = stringField("url")
+
+    /** Best-effort extraction of a local directory path from resource_ref JSON. */
+    val localPath: String?
+        get() = stringField("local_path")
+
+    private fun stringField(key: String): String? {
+        val obj = resourceRef as? JsonObject ?: return null
+        return (obj[key] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+    }
+}
+
+/** Response wrapper for GET /api/projects/{id}/resources. */
+@Serializable
+data class ListProjectResourcesResponse(
+    val resources: List<ProjectResource> = emptyList(),
 )
 
 /** Build the resource_ref JSON for a github_repo resource: `{ "url": <url> }`. */

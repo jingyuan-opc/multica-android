@@ -43,7 +43,7 @@ fun InboxScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.padding(contentPadding)) {
+    Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
         InboxFilterBar(
             filter = state.filter,
             unreadCount = state.unreadCount,
@@ -54,7 +54,7 @@ fun InboxScreen(
         PullToRefreshBox(
             isRefreshing = state.isLoading && state.items.isNotEmpty(),
             onRefresh = viewModel::refresh,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().weight(1f),
         ) {
             when {
                 state.isLoading && state.items.isEmpty() -> {
@@ -120,63 +120,27 @@ private fun InboxFilterBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SegmentedButtons(
-            options = listOf(InboxFilter.Unread, InboxFilter.All),
-            selected = filter,
-            onSelect = onFilterChange,
-            label = { f ->
-                Text(
-                    when (f) {
-                        InboxFilter.Unread -> "Unread ($unreadCount)"
-                        InboxFilter.All -> "All"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            },
-        )
+        listOf(InboxFilter.Unread, InboxFilter.All).forEach { option ->
+            FilterChip(
+                selected = filter == option,
+                onClick = { onFilterChange(option) },
+                label = {
+                    Text(
+                        when (option) {
+                            InboxFilter.Unread -> "Unread ($unreadCount)"
+                            InboxFilter.All -> "All"
+                        },
+                    )
+                },
+            )
+            if (option != InboxFilter.All) Spacer(Modifier.width(8.dp))
+        }
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onMarkAllRead) {
             Text(stringResource(R.string.inbox_mark_all_read))
         }
         TextButton(onClick = onArchiveAllRead) {
             Text(stringResource(R.string.inbox_archive_read))
-        }
-    }
-}
-
-@Composable
-private fun SegmentedButtons(
-    options: List<InboxFilter>,
-    selected: InboxFilter,
-    onSelect: (InboxFilter) -> Unit,
-    label: @Composable (InboxFilter) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        options.forEach { option ->
-            val isSelected = option == selected
-            Box(
-                modifier = Modifier
-                    .clickable { onSelect(option) }
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.surface
-                        else Color.Transparent,
-                    )
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                ProvideTextStyle(
-                    MaterialTheme.typography.labelLarge.copy(
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    ),
-                ) {
-                    label(option)
-                }
-            }
         }
     }
 }

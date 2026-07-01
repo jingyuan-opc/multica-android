@@ -11,10 +11,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
@@ -81,8 +84,10 @@ class ProjectDetailViewModel @Inject constructor(
             _state.update { it.copy(isLoading = true, errorMessage = null) }
             val projectResult = projectRepository.get(projectId)
             val issuesResult = issueRepository.list(projectId = projectId, limit = 50)
+            val resourcesResult = projectRepository.listResources(projectId)
             val project = (projectResult as? ApiResult.Success)?.data
             val issues = (issuesResult as? ApiResult.Success)?.data?.issues ?: emptyList()
+            val resources = (resourcesResult as? ApiResult.Success)?.data?.resources ?: emptyList()
 
             // Load members + agents (for lead picker) lazily.
             if (project != null && _state.value.members.isEmpty()) {
@@ -107,6 +112,7 @@ class ProjectDetailViewModel @Inject constructor(
                     isLoading = false,
                     project = project,
                     issues = issues,
+                    resources = resources,
                     errorMessage = when {
                         projectResult is ApiResult.HttpError -> projectResult.message
                         issuesResult is ApiResult.HttpError -> issuesResult.message
@@ -115,6 +121,41 @@ class ProjectDetailViewModel @Inject constructor(
                     },
                 )
             }
+        }
+    }
+
+    fun addGithubResource(url: String) {
+        if (url.isBlank()) return
+        viewModelScope.launch {
+            projectRepository.createResource(
+                projectId,
+                ai.multica.android.data.dto.CreateProjectResourceInput(
+                    resourceType = ai.multica.android.data.model.ProjectResourceType.GITHUB_REPO.wireValue,
+                    resourceRef = ai.multica.android.data.model.githubRepoRef(url),
+                ),
+            )
+            refresh()
+        }
+    }
+
+    fun addLocalResource(path: String, daemonId: String, label: String?) {
+        if (path.isBlank()) return
+        viewModelScope.launch {
+            projectRepository.createResource(
+                projectId,
+                ai.multica.android.data.dto.CreateProjectResourceInput(
+                    resourceType = ai.multica.android.data.model.ProjectResourceType.LOCAL_DIRECTORY.wireValue,
+                    resourceRef = ai.multica.android.data.model.localDirectoryRef(path, daemonId.ifBlank { "default" }, label),
+                ),
+            )
+            refresh()
+        }
+    }
+
+    fun removeResource(resourceId: String) {
+        viewModelScope.launch {
+            projectRepository.deleteResource(projectId, resourceId)
+            refresh()
         }
     }
 
@@ -203,6 +244,7 @@ data class ProjectDetailUiState(
     val issues: List<Issue> = emptyList(),
     val members: List<MemberWithUser> = emptyList(),
     val agents: List<ai.multica.android.data.model.Agent> = emptyList(),
+    val resources: List<ai.multica.android.data.model.ProjectResource> = emptyList(),
     val pins: List<PinnedItem>? = null,
     val isEditingDescription: Boolean = false,
     val descriptionDraft: String = "",
@@ -297,6 +339,9 @@ fun ProjectDetailScreen(
                     onDescriptionChange = viewModel::onDescriptionDraftChange,
                     onDescriptionSave = { viewModel.updateDescription(state.descriptionDraft) },
                     onCancelEditDescription = { viewModel.setEditingDescription(false) },
+                    onAddGithubResource = viewModel::addGithubResource,
+                    onAddLocalResource = viewModel::addLocalResource,
+                    onRemoveResource = viewModel::removeResource,
                 )
             }
         }
@@ -345,6 +390,9 @@ private fun ProjectDetailContent(
     onDescriptionChange: (String) -> Unit,
     onDescriptionSave: () -> Unit,
     onCancelEditDescription: () -> Unit,
+    onAddGithubResource: (String) -> Unit,
+    onAddLocalResource: (String, String, String?) -> Unit,
+    onRemoveResource: (String) -> Unit,
 ) {
     val project = state.project!!
     LazyColumn(
@@ -461,6 +509,15 @@ private fun ProjectDetailContent(
                     }
                 }
             }
+        }
+
+        item {
+            ProjectResourcesSection(
+                resources = state.resources,
+                onAddGithub = onAddGithubResource,
+                onAddLocal = onAddLocalResource,
+                onRemove = onRemoveResource,
+            )
         }
 
         item {
@@ -629,5 +686,143 @@ private fun LeadOptionRow(
             }
         }
         if (selected) Icon(Icons.Filled.Check, "Selected", tint = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/**
+ * Resources section — mirrors the web's ProjectResourcesSection. Lists attached
+ * GitHub repos / local directories and supports adding (github URL or local
+ * path) and removing. Local add is desktop-only on web (requires a native
+ * directory picker + daemon bridge); here we accept a typed path + daemon id.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProjectResourcesSection(
+    resources: List<ai.multica.android.data.model.ProjectResource>,
+    onAddGithub: (String) -> Unit,
+    onAddLocal: (String, String, String?) -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    var showAdd by remember { mutableStateOf(false) }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            TextButton(onClick = { showAdd = true }) {
+                Icon(Icons.Filled.Add, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Add")
+            }
+        }
+        if (resources.isEmpty()) {
+            Text("No sources attached", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            resources.forEach { res ->
+                val (icon, primary, secondary) = when (res.resourceType) {
+                    ai.multica.android.data.model.ProjectResourceType.GITHUB_REPO ->
+                        Triple(Icons.Filled.Public, res.githubUrl ?: res.label ?: "GitHub repo", res.label)
+                    ai.multica.android.data.model.ProjectResourceType.LOCAL_DIRECTORY ->
+                        Triple(Icons.Filled.Folder, res.localPath ?: res.label ?: "Local directory", res.label)
+                }
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.medium) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(primary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            if (!secondary.isNullOrBlank() && secondary != primary) {
+                                Text(secondary, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        IconButton(onClick = { onRemove(res.id) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showAdd) {
+        AddResourceSheet(
+            onAddGithub = { url -> onAddGithub(url); showAdd = false },
+            onAddLocal = { path, daemon, label -> onAddLocal(path, daemon, label); showAdd = false },
+            onDismiss = { showAdd = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddResourceSheet(
+    onAddGithub: (String) -> Unit,
+    onAddLocal: (String, String, String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var mode by remember { mutableStateOf("github") }
+    var githubUrl by remember { mutableStateOf("") }
+    var localPath by remember { mutableStateOf("") }
+    var daemonId by remember { mutableStateOf("") }
+    var localLabel by remember { mutableStateOf("") }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.padding(16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Add source", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = mode == "github",
+                    onClick = { mode = "github" },
+                    leadingIcon = { Icon(Icons.Filled.Public, null, modifier = Modifier.size(16.dp)) },
+                    label = { Text("GitHub repo") },
+                )
+                FilterChip(
+                    selected = mode == "local",
+                    onClick = { mode = "local" },
+                    leadingIcon = { Icon(Icons.Filled.Folder, null, modifier = Modifier.size(16.dp)) },
+                    label = { Text("Local directory") },
+                )
+            }
+            if (mode == "github") {
+                OutlinedTextField(
+                    value = githubUrl,
+                    onValueChange = { githubUrl = it },
+                    label = { Text("GitHub URL") },
+                    placeholder = { Text("https://github.com/owner/repo") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                Button(
+                    onClick = { onAddGithub(githubUrl) },
+                    enabled = githubUrl.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Attach") }
+            } else {
+                OutlinedTextField(
+                    value = localPath,
+                    onValueChange = { localPath = it },
+                    label = { Text("Local path *") },
+                    placeholder = { Text("/home/user/project") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = daemonId,
+                    onValueChange = { daemonId = it },
+                    label = { Text("Daemon ID") },
+                    placeholder = { Text("default") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = localLabel,
+                    onValueChange = { localLabel = it },
+                    label = { Text("Label (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                Button(
+                    onClick = { onAddLocal(localPath, daemonId, localLabel.ifBlank { null }) },
+                    enabled = localPath.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Attach") }
+            }
+        }
     }
 }

@@ -4,11 +4,14 @@ import ai.multica.android.core.network.ApiResult
 import ai.multica.android.core.network.MulticaApi
 import ai.multica.android.core.network.NetworkFactory
 import ai.multica.android.core.network.apiCall
+import ai.multica.android.data.dto.CreateProjectResourceInput
 import ai.multica.android.data.dto.UpdateProjectRequest
+import ai.multica.android.data.model.ListProjectResourcesResponse
 import ai.multica.android.data.model.ListProjectsResponse
 import ai.multica.android.data.model.Project
 import ai.multica.android.data.model.ProjectLeadType
 import ai.multica.android.data.model.ProjectPriority
+import ai.multica.android.data.model.ProjectResource
 import ai.multica.android.data.model.ProjectStatus
 import ai.multica.android.data.model.SearchProjectsResponse
 import javax.inject.Inject
@@ -77,4 +80,15 @@ class ProjectRepository @Inject constructor(
 
     suspend fun search(q: String, limit: Int = 20): ApiResult<SearchProjectsResponse> =
         apiCall(NetworkFactory.json) { api.searchProjects(q = q, limit = limit) }
+
+    // --- Resources (GitHub repos / local directories) ---
+
+    suspend fun listResources(projectId: String): ApiResult<ListProjectResourcesResponse> =
+        apiCall(NetworkFactory.json) { api.listProjectResources(projectId) }
+
+    suspend fun createResource(projectId: String, body: CreateProjectResourceInput): ApiResult<ProjectResource> =
+        apiCall(NetworkFactory.json) { api.createProjectResource(projectId, body) }
+
+    suspend fun deleteResource(projectId: String, resourceId: String): ApiResult<Unit> =
+        apiCall(NetworkFactory.json) { api.deleteProjectResource(projectId, resourceId) }
 }

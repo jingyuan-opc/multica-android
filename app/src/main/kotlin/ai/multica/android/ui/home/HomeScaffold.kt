@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BugReport
@@ -160,6 +161,7 @@ fun HomeScaffold(
                         HomeTab.Agents -> AgentsScreen(
                             contentPadding = padding,
                             onOpenAgent = { navController.navigate("agent/$it") },
+                            onCreateAgent = { navController.navigate("create-agent") },
                             refreshTrigger = agentsVisits,
                         )
                     }
@@ -194,23 +196,25 @@ private fun AppDrawer(
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        // Navigation entries (drawer-only destinations).
+        // Navigation entries — grouped to mirror the web sidebar.
+        // Web groups: Personal (inbox, myIssues) | Workspace (issues, projects,
+        // autopilots, agents, squads, usage) | Configure (settings). Inbox/
+        // issues/projects/agents live in the bottom tab bar here, so the drawer
+        // surfaces the remaining destinations under the same conceptual groups.
+        DrawerSectionTitle(text = stringResource(R.string.drawer_section_personal))
         DrawerEntry(icon = Icons.AutoMirrored.Filled.List, label = stringResource(R.string.drawer_my_issues)) { onNavigate("my-issues") }
+
+        DrawerSectionTitle(text = stringResource(R.string.drawer_section_workspace))
+        DrawerEntry(icon = Icons.Filled.Bolt, label = stringResource(R.string.drawer_autopilots)) { onNavigate("autopilots") }
         DrawerEntry(icon = Icons.Filled.Group, label = stringResource(R.string.drawer_squads)) { onNavigate("squads") }
         DrawerEntry(icon = Icons.Filled.Person, label = stringResource(R.string.drawer_members)) { onNavigate("members") }
-        DrawerEntry(icon = Icons.Filled.Bolt, label = stringResource(R.string.drawer_autopilots)) { onNavigate("autopilots") }
-        DrawerEntry(icon = Icons.Filled.Label, label = stringResource(R.string.drawer_labels)) { onNavigate("labels") }
+        DrawerEntry(icon = Icons.AutoMirrored.Filled.Label, label = stringResource(R.string.drawer_labels)) { onNavigate("labels") }
 
         // Pinned items (if any).
         val pins = homeState.pins
         if (!pins.isNullOrEmpty()) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text(
-                text = stringResource(R.string.drawer_pinned),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(16.dp),
-            )
+            DrawerSectionTitle(text = stringResource(R.string.drawer_pinned))
             pins.forEach { pin ->
                 val (icon, label, route) = when (pin.itemType) {
                     PinnedItemType.ISSUE -> Triple(Icons.Filled.BugReport, "Issue", "issue/${pin.itemId}")
@@ -232,6 +236,19 @@ private fun DrawerEntry(icon: ImageVector, label: String, onClick: () -> Unit) {
         selected = false,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 12.dp),
+    )
+}
+
+/** Small uppercase section label inside the drawer, mirroring the web sidebar groupings. */
+@Composable
+private fun DrawerSectionTitle(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 4.dp),
+        letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp),
     )
 }
 

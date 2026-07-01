@@ -124,9 +124,7 @@ fun ProjectsScreen(
         ) {
             when {
                 state.isLoading && state.projects.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    ai.multica.android.ui.components.ListLoadingSkeleton(contentPadding = PaddingValues(16.dp))
                 }
                 state.errorMessage != null && state.projects.isEmpty() -> {
                     EmptyState(
@@ -185,6 +183,8 @@ private fun ProjectCard(project: Project, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

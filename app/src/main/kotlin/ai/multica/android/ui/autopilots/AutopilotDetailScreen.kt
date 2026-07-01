@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Webhook
@@ -36,6 +37,7 @@ import androidx.lifecycle.viewModelScope
 import ai.multica.android.R
 import ai.multica.android.core.network.ApiResult
 import ai.multica.android.data.dto.UpdateAutopilotTriggerRequest
+import ai.multica.android.data.model.AutopilotCollaborator
 import ai.multica.android.data.model.AutopilotRun
 import ai.multica.android.data.model.AutopilotStatus
 import ai.multica.android.data.model.AutopilotTrigger
@@ -152,6 +154,21 @@ class AutopilotDetailViewModel @Inject constructor(
             refresh()
         }
     }
+
+    fun grantAccess(userId: String) {
+        if (userId.isBlank()) return
+        viewModelScope.launch {
+            autopilotRepository.grantAccess(autopilotId, userId.trim())
+            refresh()
+        }
+    }
+
+    fun revokeAccess(userId: String) {
+        viewModelScope.launch {
+            autopilotRepository.revokeAccess(autopilotId, userId)
+            refresh()
+        }
+    }
 }
 
 data class AutopilotDetailUiState(
@@ -224,6 +241,8 @@ fun AutopilotDetailScreen(
                     onEditTrigger = { editingTrigger = it },
                     onToggleTrigger = viewModel::toggleTriggerEnabled,
                     onRequestDeleteTrigger = { deletingTrigger = it },
+                    onGrantAccess = viewModel::grantAccess,
+                    onRevokeAccess = viewModel::revokeAccess,
                 )
             }
         }
@@ -312,6 +331,8 @@ private fun AutopilotDetailContent(
     onEditTrigger: (AutopilotTrigger) -> Unit,
     onToggleTrigger: (AutopilotTrigger) -> Unit,
     onRequestDeleteTrigger: (AutopilotTrigger) -> Unit,
+    onGrantAccess: (String) -> Unit,
+    onRevokeAccess: (String) -> Unit,
 ) {
     val detail = state.detail!!
     val ap = detail.autopilot
@@ -344,7 +365,7 @@ private fun AutopilotDetailContent(
         // Triggers.
         if (detail.triggers.isNotEmpty()) {
             item {
-                Text("Triggers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                ai.multica.android.ui.components.SectionHeader(title = "Triggers")
             }
             items(detail.triggers, key = { it.id }) { trigger ->
                 TriggerRow(
@@ -355,9 +376,17 @@ private fun AutopilotDetailContent(
                 )
             }
         }
+        // Collaborators (manage access).
+        item {
+            CollaboratorsSection(
+                collaborators = detail.collaborators,
+                onGrant = onGrantAccess,
+                onRevoke = onRevokeAccess,
+            )
+        }
         // Runs.
         item {
-            Text(stringResource(R.string.autopilot_runs), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            ai.multica.android.ui.components.SectionHeader(title = stringResource(R.string.autopilot_runs))
         }
         if (state.runs.isEmpty()) {
             item { EmptyState(icon = Icons.Filled.Bolt, title = "No runs yet") }
@@ -569,5 +598,63 @@ private fun TriggerEditDialog(
                 TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.common_cancel)) }
             },
         )
+    }
+}
+
+/**
+ * Collaborators section — mirrors the web's manage-access dialog. Lists granted
+ * members and supports granting (by user ID) and revoking access. Grant returns
+ * the full updated collaborator list, so we refresh after each action.
+ */
+@Composable
+private fun CollaboratorsSection(
+    collaborators: List<AutopilotCollaborator>,
+    onGrant: (String) -> Unit,
+    onRevoke: (String) -> Unit,
+) {
+    var showGrant by remember { mutableStateOf(false) }
+    var newUserId by remember { mutableStateOf("") }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.autopilot_collaborators), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            TextButton(onClick = { showGrant = !showGrant }) {
+                Text(if (showGrant) stringResource(R.string.common_cancel) else stringResource(R.string.autopilot_grant_access))
+            }
+        }
+        if (showGrant) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = newUserId,
+                    onValueChange = { newUserId = it },
+                    label = { Text("User ID") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = { onGrant(newUserId); newUserId = ""; showGrant = false },
+                    enabled = newUserId.isNotBlank(),
+                ) { Text(stringResource(R.string.common_ok)) }
+            }
+        }
+        if (collaborators.isEmpty()) {
+            Text("No collaborators", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            collaborators.forEach { c ->
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), shape = MaterialTheme.shapes.medium) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Person, null)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.userId.take(8), style = MaterialTheme.typography.bodyMedium)
+                            Text("Granted ${c.createdAt.take(10)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(onClick = { onRevoke(c.userId) }) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Revoke", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }

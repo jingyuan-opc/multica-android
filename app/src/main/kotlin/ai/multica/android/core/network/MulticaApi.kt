@@ -93,6 +93,21 @@ interface MulticaApi {
     @DELETE("api/projects/{id}")
     suspend fun deleteProject(@Path("id") id: String): Response<Unit>
 
+    @GET("api/projects/{id}/resources")
+    suspend fun listProjectResources(@Path("id") id: String): Response<ai.multica.android.data.model.ListProjectResourcesResponse>
+
+    @POST("api/projects/{id}/resources")
+    suspend fun createProjectResource(
+        @Path("id") id: String,
+        @Body body: ai.multica.android.data.dto.CreateProjectResourceInput,
+    ): Response<ai.multica.android.data.model.ProjectResource>
+
+    @DELETE("api/projects/{id}/resources/{resourceId}")
+    suspend fun deleteProjectResource(
+        @Path("id") id: String,
+        @Path("resourceId") resourceId: String,
+    ): Response<Unit>
+
     @GET("api/projects/search")
     suspend fun searchProjects(
         @Query("q") q: String,
@@ -130,6 +145,10 @@ interface MulticaApi {
 
     @GET("api/agents")
     suspend fun listAgents(@Query("include_archived") includeArchived: Boolean = false): Response<List<Agent>>
+
+    // Read-only runtime list (workspace scope resolved from X-Workspace-Slug).
+    @GET("api/runtimes")
+    suspend fun listRuntimes(): Response<List<ai.multica.android.data.model.RuntimeDevice>>
 
     @GET("api/agents/{id}")
     suspend fun getAgent(@Path("id") id: String): Response<Agent>

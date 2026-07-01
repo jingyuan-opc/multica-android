@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -111,6 +112,7 @@ data class AgentsUiState(
 fun AgentsScreen(
     contentPadding: PaddingValues,
     onOpenAgent: (String) -> Unit,
+    onCreateAgent: () -> Unit,
     refreshTrigger: Int = 0,
     viewModel: AgentsViewModel = hiltViewModel(),
 ) {
@@ -125,7 +127,7 @@ fun AgentsScreen(
         ) {
             when {
                 state.isLoading && state.agents.isEmpty() ->
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    ai.multica.android.ui.components.ListLoadingSkeleton(contentPadding = PaddingValues(16.dp))
                 state.errorMessage != null && state.agents.isEmpty() ->
                     EmptyState(icon = Icons.Filled.SmartToy, title = stringResource(R.string.agents_empty), description = state.errorMessage)
                 state.agents.isEmpty() ->
@@ -140,13 +142,27 @@ fun AgentsScreen(
                 }
             }
         }
+        FloatingActionButton(
+            onClick = onCreateAgent,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.agents_new))
+        }
     }
 }
 
 @Composable
 private fun AgentCard(agent: Agent, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,

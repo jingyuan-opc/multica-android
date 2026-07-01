@@ -8,6 +8,7 @@ import ai.multica.android.data.dto.CreateAgentRequest
 import ai.multica.android.data.dto.UpdateAgentRequest
 import ai.multica.android.data.model.Agent
 import ai.multica.android.data.model.CancelledCountResponse
+import ai.multica.android.data.model.RuntimeDevice
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +18,10 @@ class AgentRepository @Inject constructor(
 ) {
     suspend fun list(includeArchived: Boolean = false): ApiResult<List<Agent>> =
         apiCall(NetworkFactory.json) { api.listAgents(includeArchived) }
+
+    /** Read-only list of runtimes available to bind an agent to. */
+    suspend fun listRuntimes(): ApiResult<List<RuntimeDevice>> =
+        apiCall(NetworkFactory.json) { api.listRuntimes() }
 
     suspend fun get(id: String): ApiResult<Agent> =
         apiCall(NetworkFactory.json) { api.getAgent(id) }
