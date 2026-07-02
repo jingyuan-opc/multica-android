@@ -8,21 +8,19 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.widget.TextView
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.CorePlugin
 import io.noties.markwon.core.spans.CodeSpan
-import io.noties.markwon.core.spans.EmphasisSpan
-import io.noties.markwon.core.spans.HeadingSpan
-import io.noties.markwon.core.spans.LinkSpan
-import io.noties.markwon.core.spans.StrongEmphasisSpan
-import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 
 /**
@@ -79,9 +77,54 @@ fun MarkdownText(
 }
 
 private fun buildMarkwon(context: Context): Markwon {
-    val builder = Markwon.builder(context)
+    return Markwon.builder(context)
         .usePlugin(CorePlugin.create())
         .usePlugin(LinkifyPlugin.create())
-        .usePlugin(TablePlugin.create(context))
-    return builder.build()
+        // Note: GFM tables are NOT registered here. Markwon's single-TextView
+        // table simulation misaligns when cells wrap, so tables are parsed out
+        // by MarkdownTableParser and rendered by MarkdownTableView instead.
+        .build()
+}
+
+/**
+ * Full markdown renderer that splits the document into text and table blocks.
+ * Text blocks (everything except GFM tables) go through Markwon; table blocks
+ * are rendered as a real Compose grid via [MarkdownTableView] so columns stay
+ * aligned even when cell content wraps.
+ *
+ * This is the entry point issue descriptions / comments should use when the
+ * content may contain tables. [MarkdownText] (Markwon only) remains available
+ * for inline fragments known not to contain tables (e.g. a single table cell).
+ */
+@Composable
+fun MarkdownRichText(
+    text: String,
+    modifier: Modifier = Modifier,
+    textColor: Color = Color.Unspecified,
+    linkColor: Color = Color.Unspecified,
+    codeColor: Color = Color.Unspecified,
+) {
+    val segments = remember(text) { MarkdownTableParser.parse(text) }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        segments.forEach { segment ->
+            when (segment) {
+                is MarkdownSegment.Text -> {
+                    if (segment.content.isNotBlank()) {
+                        MarkdownText(
+                            text = segment.content,
+                            textColor = textColor,
+                            linkColor = linkColor,
+                            codeColor = codeColor,
+                        )
+                    }
+                }
+                is MarkdownSegment.Table -> MarkdownTableView(
+                    table = segment,
+                    textColor = textColor,
+                    linkColor = linkColor,
+                    codeColor = codeColor,
+                )
+            }
+        }
+    }
 }

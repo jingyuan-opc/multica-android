@@ -45,7 +45,7 @@ import ai.multica.android.data.model.IssueStatus
 import ai.multica.android.data.model.Label
 import ai.multica.android.data.model.TimelineEntry
 import ai.multica.android.data.model.TimelineRow
-import ai.multica.android.ui.comments.MarkdownText
+import ai.multica.android.ui.comments.MarkdownRichText
 import ai.multica.android.ui.comments.ReactionsBar
 import ai.multica.android.ui.components.MulticaAvatar
 import ai.multica.android.ui.components.StatusChip
@@ -438,7 +438,7 @@ private fun IssueHeader(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                 onClick = onStartEditDescription,
             ) {
-                MarkdownText(
+                MarkdownRichText(
                     text = issue.description,
                     textColor = MaterialTheme.colorScheme.onSurface,
                     linkColor = MaterialTheme.colorScheme.primary,
@@ -701,7 +701,7 @@ private fun CommentEntry(
             if (entry.content.isNullOrBlank()) {
                 Text("(deleted)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
             } else {
-                MarkdownText(text = entry.content, textColor = MaterialTheme.colorScheme.onSurface, linkColor = MaterialTheme.colorScheme.primary, codeColor = MaterialTheme.colorScheme.tertiary)
+                MarkdownRichText(text = entry.content, textColor = MaterialTheme.colorScheme.onSurface, linkColor = MaterialTheme.colorScheme.primary, codeColor = MaterialTheme.colorScheme.tertiary)
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -32,7 +32,7 @@ import ai.multica.android.core.network.ApiResult
 import ai.multica.android.data.model.Agent
 import ai.multica.android.data.repository.AgentRepository
 import ai.multica.android.ui.components.EmptyState
-import ai.multica.android.ui.comments.MarkdownText
+import ai.multica.android.ui.comments.MarkdownRichText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -293,7 +293,7 @@ private fun AgentDetailContent(
             TextButton(onClick = onEditInstructions) { Text("Edit") }
         }
         if (agent.instructions.isNotBlank()) {
-            MarkdownText(
+            MarkdownRichText(
                 text = agent.instructions,
                 textColor = MaterialTheme.colorScheme.onSurface,
                 linkColor = MaterialTheme.colorScheme.primary,

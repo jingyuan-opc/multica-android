@@ -121,9 +121,9 @@ dependencies {
     // Time
     implementation(libs.kotlinx.datetime)
 
-    // Markdown
+    // Markdown (tables rendered natively via MarkdownTableParser + Compose grid,
+    // not via Markwon's ext-tables TextView simulation which misaligns on wrap)
     implementation(libs.markwon.core)
-    implementation(libs.markwon.ext.tables)
     implementation(libs.markwon.linkify)
 
     // Material XML themes
