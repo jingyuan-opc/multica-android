@@ -52,6 +52,7 @@ class IssueDetailViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val labelRepository: LabelRepository,
     private val pinRepository: PinRepository,
+    private val workspaceBootstrap: ai.multica.android.core.auth.WorkspaceBootstrap,
     savedStateHandle: SavedStateHandle,
     @ApplicationContext context: Context,
 ) : ViewModel() {
@@ -72,7 +73,12 @@ class IssueDetailViewModel @Inject constructor(
         // currentUserId before the subscribers/reactions lists land — otherwise
         // toggleSubscribe could flip the wrong direction and reactions could
         // stack duplicates on first interaction.
+        //
+        // We also await the workspace restore so that when the OS recreates
+        // the process and the user lands here directly, AuthInterceptor has
+        // the X-Workspace-Slug header before the first request fires.
         viewModelScope.launch {
+            workspaceBootstrap.restored.await()
             val me = authRepository.getMe().getOrNull()?.id
             currentUserId = me
             _state.update { it.copy(currentUserId = me) }

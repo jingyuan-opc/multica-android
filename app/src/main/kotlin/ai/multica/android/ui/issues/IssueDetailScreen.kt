@@ -128,6 +128,8 @@ fun IssueDetailScreen(
                 replyTo = state.draftReplyTo,
                 isPosting = state.isPostingComment,
                 error = state.commentError,
+                members = state.members,
+                agents = state.agents,
                 onValueChange = viewModel::onDraftChange,
                 onPost = { viewModel.postComment(state.draftComment, state.draftReplyTo) },
                 onCancelReply = viewModel::cancelReply,
@@ -760,13 +762,34 @@ private fun CommentComposer(
     replyTo: String?,
     isPosting: Boolean,
     error: String?,
+    members: List<ai.multica.android.data.model.MemberWithUser>,
+    agents: List<ai.multica.android.data.model.Agent>,
     onValueChange: (String) -> Unit,
     onPost: () -> Unit,
     onCancelReply: () -> Unit,
     onDismissError: () -> Unit,
 ) {
+    // Mention suggestion state: derived from the current draft. When the cursor
+    // follows an active "@query", we show a dropdown of matching members/agents.
+    // Selecting one inserts `[@Label](mention://member|agent/UUID)` so the server
+    // parses it as a real mention (matching the web editor's format).
+    val mentionQuery = remember(value) { extractMentionQuery(value) }
+    val suggestions = remember(mentionQuery, members, agents) {
+        if (mentionQuery == null) emptyList()
+        else buildMentionSuggestions(mentionQuery, members, agents)
+    }
+
     Surface(tonalElevation = 4.dp, color = MaterialTheme.colorScheme.surface) {
         Column {
+            // Mention suggestion dropdown (shown above the input while typing "@").
+            if (suggestions.isNotEmpty()) {
+                MentionSuggestions(
+                    suggestions = suggestions,
+                    onPick = { sugg ->
+                        onValueChange(insertMention(value, sugg))
+                    },
+                )
+            }
             if (error != null) {
                 Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -799,6 +822,108 @@ private fun CommentComposer(
                 FilledIconButton(onClick = onPost, enabled = value.isNotBlank() && !isPosting) {
                     if (isPosting) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                     else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.issue_post))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Extract the active "@query" the user is typing, or null if the cursor is not
+ * in an @ mention. A mention starts at a `@` preceded by start-of-text or
+ * whitespace, and continues with word characters.
+ */
+private fun extractMentionQuery(text: String): String? {
+    val at = text.lastIndexOf('@')
+    if (at < 0) return null
+    // The @ must be at the start or follow whitespace (not part of an email).
+    if (at > 0 && !text[at - 1].isWhitespace()) return null
+    val query = text.substring(at + 1)
+    // Stop if the query contains whitespace (mention ended) or another @.
+    if (query.isEmpty()) return ""
+    if (query.any { it.isWhitespace() }) return null
+    return query
+}
+
+/** A single mention suggestion. */
+private data class MentionSuggestion(
+    val label: String,
+    val type: String, // "member" | "agent" | "all"
+    val id: String,
+    val subtitle: String? = null,
+    val avatarUrl: String? = null,
+    val isAgent: Boolean = false,
+)
+
+/** Build filtered mention suggestions for a [query] (already without the "@"). */
+private fun buildMentionSuggestions(
+    query: String,
+    members: List<ai.multica.android.data.model.MemberWithUser>,
+    agents: List<ai.multica.android.data.model.Agent>,
+): List<MentionSuggestion> {
+    val q = query.trim().lowercase()
+    val pred: (String) -> Boolean = { label -> q.isEmpty() || label.lowercase().contains(q) }
+    val memberItems = members
+        .filter { pred(it.name) }
+        .map { MentionSuggestion(label = it.name, type = "member", id = it.userId, subtitle = it.email, avatarUrl = it.avatarUrl) }
+    val agentItems = agents
+        .filter { pred(it.name) }
+        .map { MentionSuggestion(label = it.name, type = "agent", id = it.id, subtitle = it.model.ifBlank { "Agent" }, isAgent = true) }
+    // "all" only shows when query is empty or matches "all".
+    val allItem = if (q.isEmpty() || "all members".contains(q) || q == "all") {
+        listOf(MentionSuggestion(label = "all", type = "all", id = "all", subtitle = "Notify everyone"))
+    } else emptyList()
+    return (allItem + memberItems + agentItems).take(8)
+}
+
+/** Replace the active "@query" with a formatted mention markdown link. */
+private fun insertMention(text: String, sugg: MentionSuggestion): String {
+    val at = text.lastIndexOf('@')
+    if (at < 0) return text
+    // Escape brackets in the label so it survives markdown link parsing.
+    val safeLabel = sugg.label.replace("[", "\\[").replace("]", "\\]")
+    val mention = "[@$safeLabel](mention://${sugg.type}/${sugg.id})"
+    return text.substring(0, at) + mention + " "
+}
+
+@Composable
+private fun MentionSuggestions(
+    suggestions: List<MentionSuggestion>,
+    onPick: (MentionSuggestion) -> Unit,
+) {
+    Surface(
+        tonalElevation = 3.dp,
+        shadowElevation = 4.dp,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+            suggestions.forEach { sugg ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(sugg) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (sugg.isAgent) {
+                        Box(
+                            Modifier.size(28.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.SmartToy, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    } else {
+                        MulticaAvatar(name = sugg.label, avatarUrl = sugg.avatarUrl, size = 28.dp)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(sugg.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (sugg.subtitle != null) {
+                            Text(sugg.subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }

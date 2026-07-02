@@ -28,6 +28,7 @@ import javax.inject.Singleton
 class AuthInterceptor @Inject constructor(
     private val tokenStore: TokenStore,
     private val workspaceStore: WorkspaceStore,
+    private val workspaceBootstrap: WorkspaceBootstrap,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -41,9 +42,17 @@ class AuthInterceptor @Inject constructor(
             builder.header("Authorization", "Bearer $token")
         }
 
-        workspaceStore.getSlug()?.let { slug ->
-            builder.header("X-Workspace-Slug", slug)
+        // If no slug is loaded yet (process was recreated by the OS and the
+        // user landed directly on a detail screen), wait briefly for the
+        // workspace restore that WorkspaceBootstrap kicked off in
+        // Application.onCreate. This is a one-time gate on cold start; once
+        // restored, all subsequent requests read the slug instantly.
+        var slug = workspaceStore.getSlug()
+        if (slug == null) {
+            runCatching { runBlocking { workspaceBootstrap.restored.await() } }
+            slug = workspaceStore.getSlug()
         }
+        slug?.let { builder.header("X-Workspace-Slug", it) }
 
         return chain.proceed(builder.build())
     }
