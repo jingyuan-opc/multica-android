@@ -57,6 +57,67 @@ class TimelineThreadTest {
         assertTrue(rows.all { it.replies.isEmpty() })
     }
 
+    @Test
+    fun `replies are sorted chronologically regardless of input order`() {
+        // Mirrors web collectThreadReplies: chronological (created_at ASC),
+        // NOT depth-first. A late agent reply must not jump ahead of earlier
+        // sibling replies (#3691).
+        val c1 = comment(id = "c1", parentId = null, createdAt = "2026-06-28T10:00:00Z")
+        val c1r2 = comment(id = "c1r2", parentId = "c1", createdAt = "2026-06-28T10:02:00Z")
+        val c1r1 = comment(id = "c1r1", parentId = "c1", createdAt = "2026-06-28T10:01:00Z")
+        val c1r3 = comment(id = "c1r3", parentId = "c1", createdAt = "2026-06-28T10:03:00Z")
+
+        val rows = TimelineThread.build(listOf(c1, c1r2, c1r1, c1r3))
+        assertEquals(1, rows.size)
+        assertEquals(
+            listOf("c1r1", "c1r2", "c1r3"),
+            rows[0].replies.map { it.id },
+        )
+    }
+
+    @Test
+    fun `nested replies are flattened and sorted chronologically`() {
+        val c1 = comment(id = "c1", parentId = null, createdAt = "2026-06-28T10:00:00Z")
+        val c1r1 = comment(id = "c1r1", parentId = "c1", createdAt = "2026-06-28T10:01:00Z")
+        val c1r1r1 = comment(id = "c1r1r1", parentId = "c1r1", createdAt = "2026-06-28T09:30:00Z")
+        // Even though c1r1r1 is nested deeper, its earlier created_at puts it first.
+        val rows = TimelineThread.build(listOf(c1, c1r1, c1r1r1))
+        assertEquals(listOf("c1r1r1", "c1r1"), rows[0].replies.map { it.id })
+    }
+
+    // ---- ThreadResolution derivation ----
+
+    @Test
+    fun `root resolved_at yields Root resolution`() {
+        val root = comment(id = "c1", parentId = null, createdAt = "t").copy(resolvedAt = "2026-06-28T11:00:00Z")
+        assertEquals(ThreadResolution.Root, deriveThreadResolution(root, emptyList()))
+    }
+
+    @Test
+    fun `latest resolved reply wins over earlier ones`() {
+        val root = comment(id = "c1", parentId = null, createdAt = "t")
+        val r1 = comment(id = "r1", parentId = "c1", createdAt = "t1").copy(resolvedAt = "2026-06-28T11:00:00Z")
+        val r2 = comment(id = "r2", parentId = "c1", createdAt = "t2").copy(resolvedAt = "2026-06-28T12:00:00Z")
+        assertEquals(
+            ThreadResolution.Reply("r2"),
+            deriveThreadResolution(root, listOf(r1, r2)),
+        )
+    }
+
+    @Test
+    fun `root resolution wins over reply resolution`() {
+        val root = comment(id = "c1", parentId = null, createdAt = "t").copy(resolvedAt = "2026-06-28T10:00:00Z")
+        val r1 = comment(id = "r1", parentId = "c1", createdAt = "t1").copy(resolvedAt = "2026-06-28T12:00:00Z")
+        assertEquals(ThreadResolution.Root, deriveThreadResolution(root, listOf(r1)))
+    }
+
+    @Test
+    fun `no resolution when nothing resolved`() {
+        val root = comment(id = "c1", parentId = null, createdAt = "t")
+        val r1 = comment(id = "r1", parentId = "c1", createdAt = "t1")
+        assertEquals(ThreadResolution.None, deriveThreadResolution(root, listOf(r1)))
+    }
+
     // ---- helpers ----
 
     private fun comment(

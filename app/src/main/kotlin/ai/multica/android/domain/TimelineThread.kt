@@ -9,11 +9,12 @@ import ai.multica.android.data.model.TimelineRow
  *
  * ## What it does
  *
- * Converts a flat `List<TimelineEntry>` (returned by
- * `GET /api/issues/{id}/timeline`) into a list of
- * [TimelineRow]s, where each row bundles a top-level entry
- * with all its descendant replies (BFS-flattened). The mobile
- * thread UI renders each row as a single bubble.
+     * Converts a flat `List<TimelineEntry>` (returned by
+     * `GET /api/issues/{id}/timeline`) into a list of
+     * [TimelineRow]s, where each row bundles a top-level entry
+     * with all its descendant replies (chronologically flattened —
+     * see [collectRepliesChrono]). The thread UI renders each row
+     * as a single card.
  *
  * ## Why it matters
  *
@@ -60,29 +61,70 @@ object TimelineThread {
         }
 
         return topLevel.map { root ->
-            val replies = collectRepliesBfs(root.id, childrenOf)
+            val replies = collectRepliesChrono(root.id, childrenOf)
             TimelineRow(root = root, replies = replies)
         }
     }
 
-    private fun collectRepliesBfs(
+    /**
+     * Walk the parent_id graph rooted at [rootId] and return every descendant
+     * in CHRONOLOGICAL order (created_at ASC, id tie-break). Mirror of the web
+     * `collectThreadReplies` (packages/views/issues/components/thread-utils.ts).
+     *
+     * Chronological, not depth-first: agent replies are forced to nest under
+     * the comment that triggered them, so a depth-first walk would let a slow
+     * agent's late reply render BEFORE earlier sibling replies (#3691). The
+     * server's --thread output the agent reads is already chronological; this
+     * keeps the UI on the same order.
+     */
+    private fun collectRepliesChrono(
         rootId: String,
         childrenOf: Map<String, List<TimelineEntry>>,
     ): List<TimelineEntry> {
         val out = mutableListOf<TimelineEntry>()
-        val queue = ArrayDeque<String>()
-        queue.add(rootId)
-        while (queue.isNotEmpty()) {
-            val parent = queue.removeFirst()
-            val direct = childrenOf[parent].orEmpty()
-            for (entry in direct) {
-                out.add(entry)
-                // A reply's replies (rare in multica but allowed by
-                // the schema) are flattened into the same row at
-                // BFS depth.
-                queue.add(entry.id)
+        fun walk(id: String) {
+            val direct = childrenOf[id].orEmpty()
+            for (child in direct) {
+                out.add(child)
+                walk(child.id)
             }
         }
-        return out
+        walk(rootId)
+        return out.sortedWith(
+            compareBy({ it.createdAt }, { it.id }),
+        )
     }
+}
+
+/**
+ * A thread's resolution, derived purely from `resolved_at`. Mirror of the web
+ * `deriveThreadResolution` (packages/views/issues/components/thread-utils.ts).
+ *
+ * Two user actions write the same field:
+ *  - "Resolve thread" sets resolved_at on the ROOT → whole thread folds.
+ *  - "Resolve thread with comment" sets resolved_at on a REPLY → that reply is
+ *    the resolution; the others fold around it.
+ *
+ * The derivation is total so the UI never shows two resolutions and never
+ * crashes on any combination (older / concurrent writes can resolve more than
+ * one): root wins; otherwise the reply with the latest resolved_at is THE
+ * resolution.
+ */
+sealed interface ThreadResolution {
+    data object None : ThreadResolution
+    data object Root : ThreadResolution
+    data class Reply(val resolutionId: String) : ThreadResolution
+}
+
+fun deriveThreadResolution(
+    root: TimelineEntry,
+    replies: List<TimelineEntry>,
+): ThreadResolution {
+    if (root.resolvedAt != null) return ThreadResolution.Root
+    var chosen: TimelineEntry? = null
+    for (reply in replies) {
+        val r = reply.resolvedAt ?: continue
+        if (chosen == null || r > chosen.resolvedAt!!) chosen = reply
+    }
+    return chosen?.let { ThreadResolution.Reply(it.id) } ?: ThreadResolution.None
 }

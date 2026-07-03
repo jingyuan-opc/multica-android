@@ -1,5 +1,10 @@
 package ai.multica.android.ui.issues
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -7,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,7 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
@@ -37,14 +46,18 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ai.multica.android.R
+import ai.multica.android.data.model.Agent
 import ai.multica.android.data.model.CommentAuthorType
 import ai.multica.android.data.model.Issue
 import ai.multica.android.data.model.IssueAssigneeType
 import ai.multica.android.data.model.IssuePriority
 import ai.multica.android.data.model.IssueStatus
 import ai.multica.android.data.model.Label
+import ai.multica.android.data.model.MemberWithUser
 import ai.multica.android.data.model.TimelineEntry
 import ai.multica.android.data.model.TimelineRow
+import ai.multica.android.domain.ThreadResolution
+import ai.multica.android.domain.deriveThreadResolution
 import ai.multica.android.ui.comments.MarkdownRichText
 import ai.multica.android.ui.comments.ReactionsBar
 import ai.multica.android.ui.components.MulticaAvatar
@@ -53,6 +66,7 @@ import ai.multica.android.ui.components.labelFor as labelForStatus
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +76,26 @@ fun IssueDetailScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // Author id -> name/avatar resolution. Members are keyed by userId
+    // (the value stored in TimelineEntry.actorId), agents by their id.
+    val memberByUserId = remember(state.members) {
+        state.members.associateBy { it.userId }
+    }
+    val agentById = remember(state.agents) { state.agents.associateBy { it.id } }
+
+    // Show the "scroll to bottom" FAB only when the list is scrolled away
+    // from the last items.
+    val showScrollToEndFab by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val total = info.totalItemsCount
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            total > 4 && lastVisible >= 0 && lastVisible < total - 2
+        }
+    }
     var showStatusPicker by remember { mutableStateOf(false) }
     var showPriorityPicker by remember { mutableStateOf(false) }
     var showLabelPicker by remember { mutableStateOf(false) }
@@ -137,26 +171,28 @@ fun IssueDetailScreen(
             )
         },
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.isLoading && state.issue != null,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.fillMaxSize().padding(padding),
-        ) {
-            if (state.isLoading && state.issue == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                return@PullToRefreshBox
-            }
-            if (state.errorMessage != null && state.issue == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(state.errorMessage!!, color = MaterialTheme.colorScheme.error)
-                }
-                return@PullToRefreshBox
-            }
-            val issue = state.issue ?: return@PullToRefreshBox
-            LazyColumn(
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            PullToRefreshBox(
+                isRefreshing = state.isLoading && state.issue != null,
+                onRefresh = viewModel::refresh,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
             ) {
+                if (state.isLoading && state.issue == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    return@PullToRefreshBox
+                }
+                if (state.errorMessage != null && state.issue == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(state.errorMessage!!, color = MaterialTheme.colorScheme.error)
+                    }
+                    return@PullToRefreshBox
+                }
+                val issue = state.issue ?: return@PullToRefreshBox
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 96.dp),
+                ) {
                 // Header: identifier + title (editable) + status/priority row.
                 item(key = "header") {
                     IssueHeader(
@@ -227,13 +263,39 @@ fun IssueDetailScreen(
                         TimelineRowView(
                             row = row,
                             currentActorId = state.currentUserId,
+                            isCollapsed = row.root.id in state.collapsedThreadIds,
+                            isResolvedExpanded = row.root.id in state.expandedResolvedIds,
+                            memberByUserId = memberByUserId,
+                            agentById = agentById,
                             onToggleReaction = { id, emoji -> viewModel.toggleReaction(id, emoji) },
                             onReply = { id -> viewModel.startReply(id) },
                             onToggleResolve = { id, isResolved ->
                                 viewModel.toggleResolveComment(id, isResolved)
                             },
+                            onToggleCollapse = { viewModel.toggleThreadCollapsed(row.root.id) },
+                            onToggleResolvedExpand = { expand ->
+                                viewModel.toggleResolvedExpanded(row.root.id, expand)
+                            },
                         )
                     }
+                }
+            }
+        }
+            // Floating "scroll to bottom" action — only visible when scrolled
+            // away from the end of the timeline.
+            AnimatedVisibility(
+                visible = showScrollToEndFab,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier = Modifier.align(Alignment.BottomEnd),
+            ) {
+                FloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(Int.MAX_VALUE) } },
+                    modifier = Modifier.padding(end = 16.dp, bottom = 16.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Scroll to bottom")
                 }
             }
         }
@@ -635,42 +697,379 @@ private fun SubIssuesSection(
 
 // ---------- Timeline ----------
 
+/**
+ * One entry in the timeline. Dispatches on fold state:
+ *  - activity / status_change / progress_update / system → flat one-liner
+ *  - comment thread (root + replies) → [CommentThreadCard] which implements
+ *    the three fold mechanisms A/B/C, mirroring the web client.
+ *
+ * Fold mechanisms (mirror of packages/views/issues/components on web):
+ *  A. Per-thread collapse (persisted): a chevron on the header folds the
+ *     whole thread into one row (avatar + author + time + 80-char preview
+ *     + "N replies"). Default expanded.
+ *  B. Resolved root → resolved-bar (session): if the ROOT comment is
+ *     resolved, the whole thread collapses into a green
+ *     "N resolved comments from {authors}" bar by default; tap to expand.
+ *  C. Resolved reply → middle fold-bar (session): if a REPLY is the
+ *     resolution, the root + the resolution reply stay visible and the
+ *     other replies fold behind a "{N} comments from {authors}" bar.
+ */
 @Composable
 private fun TimelineRowView(
     row: TimelineRow,
     currentActorId: String?,
+    isCollapsed: Boolean,
+    isResolvedExpanded: Boolean,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
     onToggleReaction: (commentId: String, emoji: String) -> Unit,
     onReply: (commentId: String) -> Unit,
     onToggleResolve: (commentId: String, isResolved: Boolean) -> Unit,
+    onToggleCollapse: () -> Unit,
+    onToggleResolvedExpand: (expand: Boolean) -> Unit,
 ) {
-    Column {
-        when (row.root.type) {
-            "comment" -> CommentEntry(row.root, true, currentActorId, onToggleReaction, onReply, onToggleResolve)
-            "activity" -> ActivityEntry(row.root)
-            "status_change" -> StatusChangeEntry(row.root)
-            "progress_update" -> ProgressUpdateEntry(row.root)
-            "system" -> SystemEntry(row.root)
-            else -> CommentEntry(row.root, true, currentActorId, onToggleReaction, onReply, onToggleResolve)
+    when (row.root.type) {
+        "comment" -> {
+            val resolution = remember(row.root, row.replies) {
+                deriveThreadResolution(row.root, row.replies)
+            }
+            when {
+                // Mechanism B: root resolved → collapse whole thread to a bar
+                // unless the user expanded it this session.
+                resolution is ThreadResolution.Root && !isResolvedExpanded -> {
+                    ResolvedThreadBar(
+                        root = row.root,
+                        replies = row.replies,
+                        memberByUserId = memberByUserId,
+                        agentById = agentById,
+                        onExpand = { onToggleResolvedExpand(true) },
+                    )
+                }
+                else -> CommentThreadCard(
+                    row = row,
+                    currentActorId = currentActorId,
+                    isCollapsed = isCollapsed,
+                    isResolvedExpanded = isResolvedExpanded,
+                    resolution = resolution,
+                    memberByUserId = memberByUserId,
+                    agentById = agentById,
+                    onToggleReaction = onToggleReaction,
+                    onReply = onReply,
+                    onToggleResolve = onToggleResolve,
+                    onToggleCollapse = onToggleCollapse,
+                    onToggleResolvedExpand = onToggleResolvedExpand,
+                )
+            }
         }
-        if (row.replies.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Column(
-                modifier = Modifier
-                    .padding(start = 32.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+        "activity" -> ActivityEntry(row.root, memberByUserId, agentById)
+        "status_change" -> StatusChangeEntry(row.root, memberByUserId, agentById)
+        "progress_update" -> ProgressUpdateEntry(row.root, memberByUserId, agentById)
+        "system" -> SystemEntry(row.root)
+        else -> CommentThreadCard(
+            row = row,
+            currentActorId = currentActorId,
+            isCollapsed = isCollapsed,
+            isResolvedExpanded = isResolvedExpanded,
+            resolution = remember(row.root, row.replies) { deriveThreadResolution(row.root, row.replies) },
+            memberByUserId = memberByUserId,
+            agentById = agentById,
+            onToggleReaction = onToggleReaction,
+            onReply = onReply,
+            onToggleResolve = onToggleResolve,
+            onToggleCollapse = onToggleCollapse,
+            onToggleResolvedExpand = onToggleResolvedExpand,
+        )
+    }
+}
+
+/**
+ * Mechanism B bar: "{count} resolved comments from {authors}". Tapping expands
+ * the whole thread (root + all replies) for the session.
+ */
+@Composable
+private fun ResolvedThreadBar(
+    root: TimelineEntry,
+    replies: List<TimelineEntry>,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+    onExpand: () -> Unit,
+) {
+    val count = 1 + replies.size
+    val authorsLabel = remember(root, replies, memberByUserId, agentById) {
+        authorsLabel(listOf(root) + replies, memberByUserId, agentById)
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.08f),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onExpand),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.tertiary,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "$count 条已解决评论来自 $authorsLabel",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Filled.ExpandMore,
+                contentDescription = "Expand",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * Mechanism C bar: "{count} comments from {authors}". Sits between the root
+ * and the resolution reply; tapping expands all replies for the session.
+ */
+@Composable
+private fun CommentsFoldBar(
+    replies: List<TimelineEntry>,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+    onExpand: () -> Unit,
+) {
+    val authorsLabel = remember(replies, memberByUserId, agentById) {
+        authorsLabel(replies, memberByUserId, agentById)
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onExpand),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "${replies.size} 条评论来自 $authorsLabel",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+/**
+ * A whole comment thread card. Implements fold mechanisms A (chevron collapse)
+ * and C (reply-resolution middle fold). B (root resolution) is handled one
+ * level up in [TimelineRowView] — when the root is resolved and not expanded,
+ * it never reaches this composable.
+ */
+@Composable
+private fun CommentThreadCard(
+    row: TimelineRow,
+    currentActorId: String?,
+    isCollapsed: Boolean,
+    isResolvedExpanded: Boolean,
+    resolution: ThreadResolution,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+    onToggleReaction: (commentId: String, emoji: String) -> Unit,
+    onReply: (commentId: String) -> Unit,
+    onToggleResolve: (commentId: String, isResolved: Boolean) -> Unit,
+    onToggleCollapse: () -> Unit,
+    onToggleResolvedExpand: (expand: Boolean) -> Unit,
+) {
+    val root = row.root
+    val (authorLabel, authorAvatar) = resolveActor(root.actorType, root.actorId, memberByUserId, agentById)
+    val isRootResolved = root.resolvedAt != null
+    val replyResolutionId = (resolution as? ThreadResolution.Reply)?.resolutionId
+    val replyFolded = replyResolutionId != null && !isResolvedExpanded
+    val foldedReplies = remember(row.replies, replyResolutionId) {
+        if (replyResolutionId != null) row.replies.filter { it.id != replyResolutionId }
+        else row.replies
+    }
+    val resolutionReply = remember(row.replies, replyResolutionId) {
+        replyResolutionId?.let { id -> row.replies.firstOrNull { it.id == id } }
+    }
+
+    Column {
+        // Sticky "Collapse" bar at the top when the user expanded a resolved
+        // thread (root or reply resolution) — lets them fold it back.
+        val showCollapseBar = isResolvedExpanded &&
+            (resolution is ThreadResolution.Root || replyResolutionId != null)
+        if (showCollapseBar) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().clickable { onToggleResolvedExpand(false) },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
             ) {
-                row.replies.forEach { reply ->
-                    CommentEntry(reply, false, currentActorId, onToggleReaction, onReply, onToggleResolve)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.ExpandLess, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("收起", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        // Header — always visible. Doubles as the chevron toggle (Mechanism A)
+        // and, when collapsed, shows a content preview + reply count.
+        ThreadHeader(
+            authorLabel = authorLabel,
+            authorAvatar = authorAvatar,
+            createdAt = root.createdAt,
+            isCollapsed = isCollapsed,
+            isResolved = isRootResolved,
+            contentPreview = root.content.orEmpty().replace("\n", " ").take(80),
+            replyCount = row.replies.size,
+            onToggleCollapse = onToggleCollapse,
+        )
+
+        if (!isCollapsed) {
+            // Root body
+            CommentBody(
+                entry = root,
+                isTop = true,
+                currentActorId = currentActorId,
+                onToggleReaction = onToggleReaction,
+                onReply = onReply,
+                onToggleResolve = onToggleResolve,
+            )
+
+            if (row.replies.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                if (replyFolded && resolutionReply != null) {
+                    // Mechanism C folded: fold bar + the resolution reply only.
+                    if (foldedReplies.isNotEmpty()) {
+                        CommentsFoldBar(
+                            replies = foldedReplies,
+                            memberByUserId = memberByUserId,
+                            agentById = agentById,
+                            onExpand = { onToggleResolvedExpand(true) },
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Column(
+                        modifier = Modifier
+                            .padding(start = 32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                    ) {
+                        ResolutionReplyRow(
+                            entry = resolutionReply,
+                            currentActorId = currentActorId,
+                            memberByUserId = memberByUserId,
+                            agentById = agentById,
+                            onToggleReaction = onToggleReaction,
+                            onReply = onReply,
+                            onToggleResolve = onToggleResolve,
+                        )
+                    }
+                } else {
+                    // All replies chronologically; resolution keeps its place with a badge.
+                    Column(
+                        modifier = Modifier
+                            .padding(start = 32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.replies.forEach { reply ->
+                            ReplyRow(
+                                entry = reply,
+                                isResolution = reply.id == replyResolutionId,
+                                currentActorId = currentActorId,
+                                memberByUserId = memberByUserId,
+                                agentById = agentById,
+                                onToggleReaction = onToggleReaction,
+                                onReply = onReply,
+                                onToggleResolve = onToggleResolve,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * The always-visible thread header: chevron toggle + avatar + author + time.
+ * When collapsed, also shows an 80-char content preview and "{N} replies".
+ */
 @Composable
-private fun CommentEntry(
+private fun ThreadHeader(
+    authorLabel: String,
+    authorAvatar: String?,
+    createdAt: String,
+    isCollapsed: Boolean,
+    isResolved: Boolean,
+    contentPreview: String,
+    replyCount: Int,
+    onToggleCollapse: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onToggleCollapse, modifier = Modifier.size(20.dp)) {
+            Icon(
+                imageVector = if (isCollapsed) Icons.AutoMirrored.Filled.ArrowBack else Icons.Filled.ExpandLess,
+                contentDescription = if (isCollapsed) "Expand thread" else "Collapse thread",
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(4.dp))
+        MulticaAvatar(name = authorLabel, avatarUrl = authorAvatar, size = 24.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(authorLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(8.dp))
+        Text(formatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (isResolved) {
+            Spacer(Modifier.width(8.dp))
+            Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)) {
+                Text("Resolved", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+        }
+        if (isCollapsed) {
+            Spacer(Modifier.width(8.dp))
+            if (contentPreview.isNotBlank()) {
+                Text(
+                    contentPreview,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            if (replyCount > 0) {
+                Spacer(Modifier.width(4.dp))
+                Text("$replyCount 条回复", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** Root comment body: markdown content + reactions + reply/resolve buttons. */
+@Composable
+private fun CommentBody(
     entry: TimelineEntry,
     isTop: Boolean,
     currentActorId: String?,
@@ -678,34 +1077,67 @@ private fun CommentEntry(
     onReply: (commentId: String) -> Unit,
     onToggleResolve: (commentId: String, isResolved: Boolean) -> Unit,
 ) {
-    val authorLabel = when (entry.actorType) {
-        CommentAuthorType.AGENT -> "Agent ${entry.actorId?.takeLast(4).orEmpty()}"
-        CommentAuthorType.SYSTEM -> "System"
-        else -> "User"
+    val isResolved = entry.resolvedAt != null
+    Column {
+        if (entry.content.isNullOrBlank()) {
+            Text("(deleted)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+        } else {
+            MarkdownRichText(text = entry.content, textColor = MaterialTheme.colorScheme.onSurface, linkColor = MaterialTheme.colorScheme.primary, codeColor = MaterialTheme.colorScheme.tertiary)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ReactionsBar(
+                reactions = entry.reactions,
+                currentActorId = currentActorId,
+                onToggle = { emoji -> onToggleReaction(entry.id, emoji) },
+                onAdd = { emoji -> onToggleReaction(entry.id, emoji) },
+            )
+            Spacer(Modifier.weight(1f))
+            if (isTop) {
+                TextButton(onClick = { onReply(entry.id) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.Reply, "Reply", modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(2.dp))
+                    Text("Reply", style = MaterialTheme.typography.labelSmall)
+                }
+                TextButton(onClick = { onToggleResolve(entry.id, isResolved) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Text(if (isResolved) "Reopen" else "Resolve", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
-    val isResolved = !entry.resolvedAt.isNullOrBlank()
+}
+
+/** A reply row, optionally badged as the thread's resolution. */
+@Composable
+private fun ReplyRow(
+    entry: TimelineEntry,
+    isResolution: Boolean,
+    currentActorId: String?,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+    onToggleReaction: (commentId: String, emoji: String) -> Unit,
+    onReply: (commentId: String) -> Unit,
+    onToggleResolve: (commentId: String, isResolved: Boolean) -> Unit,
+) {
+    val (authorLabel, authorAvatar) = resolveActor(entry.actorType, entry.actorId, memberByUserId, agentById)
     Row(verticalAlignment = Alignment.Top) {
-        MulticaAvatar(name = authorLabel, avatarUrl = null, size = if (isTop) 32.dp else 24.dp)
+        MulticaAvatar(name = authorLabel, avatarUrl = authorAvatar, size = 24.dp)
         Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(authorLabel, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(8.dp))
+                Text(authorLabel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(6.dp))
                 Text(formatTimestamp(entry.createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (isResolved) {
-                    Spacer(Modifier.width(8.dp))
+                if (isResolution) {
+                    Spacer(Modifier.width(6.dp))
                     Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)) {
-                        Text("Resolved", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        Text("Resolution", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
             }
+            Spacer(Modifier.height(2.dp))
+            MarkdownRichText(text = entry.content.orEmpty(), textColor = MaterialTheme.colorScheme.onSurface, linkColor = MaterialTheme.colorScheme.primary, codeColor = MaterialTheme.colorScheme.tertiary)
             Spacer(Modifier.height(4.dp))
-            if (entry.content.isNullOrBlank()) {
-                Text("(deleted)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-            } else {
-                MarkdownRichText(text = entry.content, textColor = MaterialTheme.colorScheme.onSurface, linkColor = MaterialTheme.colorScheme.primary, codeColor = MaterialTheme.colorScheme.tertiary)
-            }
-            Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ReactionsBar(
                     reactions = entry.reactions,
@@ -714,38 +1146,69 @@ private fun CommentEntry(
                     onAdd = { emoji -> onToggleReaction(entry.id, emoji) },
                 )
                 Spacer(Modifier.weight(1f))
-                if (isTop) {
-                    TextButton(onClick = { onReply(entry.id) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.Reply, "Reply", modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text("Reply", style = MaterialTheme.typography.labelSmall)
-                    }
-                    TextButton(onClick = { onToggleResolve(entry.id, isResolved) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
-                        Text(if (isResolved) "Reopen" else "Resolve", style = MaterialTheme.typography.labelSmall)
-                    }
+                TextButton(onClick = { onReply(entry.id) }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.Reply, "Reply", modifier = Modifier.size(14.dp))
                 }
             }
         }
     }
 }
 
+/** A reply that is the thread's resolution — same as [ReplyRow] but emphasized. */
 @Composable
-private fun ActivityEntry(entry: TimelineEntry) {
+private fun ResolutionReplyRow(
+    entry: TimelineEntry,
+    currentActorId: String?,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+    onToggleReaction: (commentId: String, emoji: String) -> Unit,
+    onReply: (commentId: String) -> Unit,
+    onToggleResolve: (commentId: String, isResolved: Boolean) -> Unit,
+) {
+    ReplyRow(
+        entry = entry,
+        isResolution = true,
+        currentActorId = currentActorId,
+        memberByUserId = memberByUserId,
+        agentById = agentById,
+        onToggleReaction = onToggleReaction,
+        onReply = onReply,
+        onToggleResolve = onToggleResolve,
+    )
+}
+
+@Composable
+private fun ActivityEntry(
+    entry: TimelineEntry,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+) {
+    val (label, _) = resolveActor(entry.actorType, entry.actorId, memberByUserId, agentById)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
         Spacer(Modifier.width(8.dp))
-        Text("${actorLabel(entry)} • ${entry.action ?: "activity"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("$label • ${entry.action ?: "activity"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun StatusChangeEntry(entry: TimelineEntry) {
-    Text("${actorLabel(entry)} changed status • ${formatTimestamp(entry.createdAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun StatusChangeEntry(
+    entry: TimelineEntry,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+) {
+    val (label, _) = resolveActor(entry.actorType, entry.actorId, memberByUserId, agentById)
+    Text("$label changed status • ${formatTimestamp(entry.createdAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
-private fun ProgressUpdateEntry(entry: TimelineEntry) {
-    Text(entry.content ?: "Progress update", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun ProgressUpdateEntry(
+    entry: TimelineEntry,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+) {
+    val (label, _) = resolveActor(entry.actorType, entry.actorId, memberByUserId, agentById)
+    Text("$label • ${entry.content ?: "Progress update"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
@@ -1107,10 +1570,68 @@ private fun AssigneeOptionRow(
 
 // ---------- Helpers ----------
 
-private fun actorLabel(entry: TimelineEntry): String = when (entry.actorType) {
-    CommentAuthorType.AGENT -> "Agent"
-    CommentAuthorType.SYSTEM -> "System"
-    else -> "User"
+/**
+ * Resolve an actor (type + id) to a display name and avatar URL using the
+ * members/agents maps already loaded by the ViewModel. Members are keyed by
+ * [MemberWithUser.userId] (the value carried in [TimelineEntry.actorId]),
+ * agents by [Agent.id]. Falls back to a generic label + truncated id when
+ * the actor isn't found in the current workspace (e.g. left the workspace).
+ *
+ * Returns (name, avatarUrl).
+ */
+private fun resolveActor(
+    type: CommentAuthorType?,
+    actorId: String?,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+): Pair<String, String?> = when (type) {
+    CommentAuthorType.MEMBER -> {
+        val m = actorId?.let { memberByUserId[it] }
+        val name = m?.name?.takeIf { it.isNotBlank() }
+            ?: actorId?.takeLast(4)?.let { "User $it" }
+            ?: "User"
+        name to m?.avatarUrl
+    }
+    CommentAuthorType.AGENT -> {
+        val a = actorId?.let { agentById[it] }
+        val name = a?.name?.takeIf { it.isNotBlank() }
+            ?: "Agent ${actorId?.takeLast(4).orEmpty()}"
+        name to a?.avatarUrl
+    }
+    CommentAuthorType.SYSTEM -> "System" to null
+    null -> "Unknown" to null
+}
+
+/**
+ * Distinct author names across [entries], first-seen order, collapsed to a
+ * label ("Alice", "Alice, Bob", "Alice, Bob 等 2 人"). Mirror of the web
+ * `useAuthorsLabel` (max 2 named, then a count). Used by the resolved-bar
+ * and the middle fold-bar.
+ */
+private const val MAX_NAMED_AUTHORS = 2
+
+private fun authorsLabel(
+    entries: List<TimelineEntry>,
+    memberByUserId: Map<String, MemberWithUser>,
+    agentById: Map<String, Agent>,
+): String {
+    val seen = HashSet<String>()
+    val authors = ArrayList<Pair<CommentAuthorType?, String?>>()
+    for (e in entries) {
+        val key = "${e.actorType}:${e.actorId}"
+        if (!seen.add(key)) continue
+        authors.add(e.actorType to e.actorId)
+    }
+    val names = authors.map { (type, id) ->
+        resolveActor(type, id, memberByUserId, agentById).first
+    }
+    return when {
+        names.size <= MAX_NAMED_AUTHORS -> names.joinToString(", ")
+        else -> {
+            val named = names.take(MAX_NAMED_AUTHORS).joinToString(", ")
+            "等 ${names.size - MAX_NAMED_AUTHORS} 人".let { "$named $it" }
+        }
+    }
 }
 
 private fun formatTimestamp(iso: String): String = try {

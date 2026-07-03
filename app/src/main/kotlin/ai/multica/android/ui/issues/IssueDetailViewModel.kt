@@ -52,6 +52,7 @@ class IssueDetailViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val labelRepository: LabelRepository,
     private val pinRepository: PinRepository,
+    private val commentCollapseStore: CommentCollapseStore,
     private val workspaceBootstrap: ai.multica.android.core.auth.WorkspaceBootstrap,
     savedStateHandle: SavedStateHandle,
     @ApplicationContext context: Context,
@@ -82,6 +83,11 @@ class IssueDetailViewModel @Inject constructor(
             val me = authRepository.getMe().getOrNull()?.id
             currentUserId = me
             _state.update { it.copy(currentUserId = me) }
+            // Hydrate persisted per-thread collapse state (Mechanism A).
+            val persisted = commentCollapseStore.collapsedIds(issueId)
+            if (persisted.isNotEmpty()) {
+                _state.update { it.copy(collapsedThreadIds = persisted) }
+            }
             refresh()
         }
         observeRealtime()
@@ -246,8 +252,19 @@ class IssueDetailViewModel @Inject constructor(
                         } else row
                     }
                 }
-                st.copy(rows = newRows)
+                // If the user replied to a thread they had collapsed, un-collapse
+                // it so the optimistic reply is visible without a manual tap.
+                val newCollapsed = if (parentId != null) {
+                    val targetRootId = st.rows.firstOrNull {
+                        it.root.id == parentId || it.replies.any { r -> r.id == parentId }
+                    }?.root?.id
+                    if (targetRootId != null) st.collapsedThreadIds - targetRootId
+                    else st.collapsedThreadIds
+                } else st.collapsedThreadIds
+                st.copy(rows = newRows, collapsedThreadIds = newCollapsed)
             }
+            // Persist collapse changes (A is persisted; B/C expandedResolved is session-only).
+            persistCollapsed()
             when (val result = issueRepository.createComment(issueId, content.trim(), parentId)) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(isPostingComment = false, draftComment = "", draftReplyTo = null) }
@@ -285,20 +302,76 @@ class IssueDetailViewModel @Inject constructor(
     }
 
     fun startReply(commentId: String) {
-        val comment = _state.value.rows.firstNotNullOfOrNull { row ->
+        val st = _state.value
+        val comment = st.rows.firstNotNullOfOrNull { row ->
             if (row.root.id == commentId) row.root
             else row.replies.firstOrNull { it.id == commentId }
         }
+        val mention = comment?.let { resolveActorMention(it.actorType, it.actorId, st) } ?: ""
         _state.update {
             it.copy(
                 draftReplyTo = commentId,
-                draftComment = if (comment != null) "@${comment.actorId?.take(8) ?: ""} " else "",
+                draftComment = if (mention.isNotEmpty()) "@$mention " else "",
             )
         }
     }
 
+    /**
+     * Resolve an actor id to a human-friendly mention name. Members are keyed
+     * by [MemberWithUser.userId], agents by [Agent.id]. Falls back to a
+     * truncated id so the draft is never empty when we couldn't resolve.
+     */
+    private fun resolveActorMention(
+        type: ai.multica.android.data.model.CommentAuthorType?,
+        actorId: String?,
+        st: IssueDetailUiState,
+    ): String = when (type) {
+        ai.multica.android.data.model.CommentAuthorType.MEMBER -> {
+            val m = st.members.firstOrNull { it.userId == actorId }
+            m?.name?.takeIf { it.isNotBlank() } ?: actorId?.take(8).orEmpty()
+        }
+        ai.multica.android.data.model.CommentAuthorType.AGENT -> {
+            val a = st.agents.firstOrNull { it.id == actorId }
+            a?.name?.takeIf { it.isNotBlank() } ?: actorId?.take(8).orEmpty()
+        }
+        ai.multica.android.data.model.CommentAuthorType.SYSTEM -> "System"
+        null -> actorId?.take(8).orEmpty()
+    }
+
     fun cancelReply() {
         _state.update { it.copy(draftReplyTo = null, draftComment = "") }
+    }
+
+    /**
+     * Mechanism A: per-thread collapse. The whole thread (root + all replies)
+     * folds into a header row. Expanded is the default; persisted across launches.
+     */
+    fun toggleThreadCollapsed(rootId: String) {
+        _state.update { st ->
+            val next = if (rootId in st.collapsedThreadIds) st.collapsedThreadIds - rootId
+            else st.collapsedThreadIds + rootId
+            st.copy(collapsedThreadIds = next)
+        }
+        persistCollapsed()
+    }
+
+    /**
+     * Mechanism B/C: which resolved threads the user has temporarily expanded
+     * this session. Session-only (not persisted) — matches Linear and the web
+     * client; reload collapses everything back to bars.
+     */
+    fun toggleResolvedExpanded(rootId: String, expand: Boolean) {
+        _state.update { st ->
+            val next = if (expand) st.expandedResolvedIds + rootId
+            else st.expandedResolvedIds - rootId
+            st.copy(expandedResolvedIds = next)
+        }
+    }
+
+    private fun persistCollapsed() {
+        viewModelScope.launch {
+            commentCollapseStore.setCollapsed(issueId, _state.value.collapsedThreadIds)
+        }
     }
 
     fun toggleReaction(commentId: String, emoji: String) {
@@ -512,6 +585,19 @@ class IssueDetailViewModel @Inject constructor(
     }
 
     fun toggleResolveComment(commentId: String, isCurrentlyResolved: Boolean) {
+        // Fold the thread back on any resolve change: clear the thread ROOT's
+        // expand entry (expand state is keyed on root id, but a resolve target
+        // can be a reply). Walk parent_id up to the root. Mirror of the web
+        // `handleResolveToggle`.
+        val byId = _state.value.rawTimeline.associateBy { it.id }
+        var cur = byId[commentId]
+        while (cur?.parentId != null && byId[cur.parentId] != null) {
+            cur = byId[cur.parentId]
+        }
+        val rootId = cur?.id ?: commentId
+        if (rootId in _state.value.expandedResolvedIds) {
+            _state.update { it.copy(expandedResolvedIds = it.expandedResolvedIds - rootId) }
+        }
         viewModelScope.launch {
             if (isCurrentlyResolved) {
                 issueRepository.unresolveComment(commentId)
@@ -559,6 +645,13 @@ data class IssueDetailUiState(
     val titleDraft: String = "",
     val isEditingDescription: Boolean = false,
     val descriptionDraft: String = "",
+    // Mechanism A: per-thread collapse state (persisted). A root id present
+    // here has its whole thread folded into a header row. Default empty =
+    // expanded.
+    val collapsedThreadIds: Set<String> = emptySet(),
+    // Mechanism B/C: which resolved threads the user has temporarily expanded
+    // this session. Session-only (not persisted).
+    val expandedResolvedIds: Set<String> = emptySet(),
 ) {
     val isPinned: Boolean
         get() = pins?.any { it.itemType == PinnedItemType.ISSUE && it.itemId == issue?.id } == true
