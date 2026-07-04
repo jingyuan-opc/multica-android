@@ -1242,7 +1242,14 @@ private fun CommentComposer(
         else buildMentionSuggestions(mentionQuery, members, agents)
     }
 
-    Surface(tonalElevation = 4.dp, color = MaterialTheme.colorScheme.surface) {
+    Surface(
+        tonalElevation = 4.dp,
+        color = MaterialTheme.colorScheme.surface,
+        // Ride up with the IME so the input field is never covered by the
+        // keyboard. Scaffold's bottomBar doesn't auto-avoid the IME; this
+        // consumes the IME insets on the composer's root.
+        modifier = Modifier.imePadding(),
+    ) {
         Column {
             // Mention suggestion dropdown (shown above the input while typing "@").
             if (suggestions.isNotEmpty()) {
